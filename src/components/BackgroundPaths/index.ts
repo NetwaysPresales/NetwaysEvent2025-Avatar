@@ -1,0 +1,1 @@
+export { BackgroundPaths } from './BackgroundPaths';

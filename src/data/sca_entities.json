@@ -1,0 +1,117 @@
+[
+  {
+    "name": "Noor Capital PJSC",
+    "license": "CP-0000147",
+    "type": "Investment / Brokerage",
+    "status": "Active",
+    "emirate": "Abu Dhabi",
+    "issueDate": "2010-06-12",
+    "expiryDate": null,
+    "coordinates": {
+      "lat": 24.468323,
+      "lng": 54.340700
+    },
+    "metrics": {
+      "aumAEDBn": 3.2,
+      "clients": 14500,
+      "annualVolumeAEDBn": 0.0,
+      "complianceScore": 95
+    },
+    "narration": "Noor Capital PJSC is a prominent investment and brokerage firm headquartered in Abu Dhabi. It provides wealth management, advisory, and capital markets services. It manages AED 3.2 billion in assets, serves 14,500 clients, and maintains a compliance score of 95/100."
+  },
+  {
+    "name": "Abu Dhabi Commercial Bank (ADCB)",
+    "license": "CP-0000041",
+    "type": "Financial / Banking / Investment",
+    "status": "Active",
+    "emirate": "Abu Dhabi",
+    "issueDate": "2000-01-01",
+    "expiryDate": null,
+    "coordinates": {
+      "lat": 24.493267,
+      "lng": 54.374607
+    },
+    "metrics": {
+      "marketCapAEDBn": 102,
+      "dividendYieldPct": 4.0,
+      "complianceScore": 94
+    },
+    "narration": "Abu Dhabi Commercial Bank, known as ADCB, is one of the UAE's leading banks. It offers integrated financial and investment services with a market capitalization near AED 102 billion, consistent dividend performance, and strong regulatory compliance record."
+  },
+  {
+    "name": "Emirates Coin Investment LLC (EmCoin)",
+    "license": "CP-0001022",
+    "type": "Virtual Asset Services / Exchange",
+    "status": "Active",
+    "emirate": "Abu Dhabi",
+    "issueDate": "2022-03-15",
+    "expiryDate": null,
+    "coordinates": {
+      "lat": 24.468893,
+      "lng": 54.337792
+    },
+    "metrics": {
+      "annualVolumeAEDBn": 0.45,
+      "userGrowthPct": 18,
+      "complianceScore": 92
+    },
+    "narration": "Emirates Coin Investment LLC, or EmCoin, is a regulated virtual asset services provider based in Abu Dhabi. It offers secure and compliant digital asset trading, handling an estimated AED 450 million in volume last year with user growth of 18%."
+  },
+  {
+    "name": "4T Global Markets Financial Services LLC",
+    "license": "CP-0000042",
+    "type": "Brokerage / Financial Services",
+    "status": "Active",
+    "emirate": "Dubai",
+    "issueDate": "2016-10-10",
+    "expiryDate": null,
+    "coordinates": {
+      "lat": 25.186261,
+      "lng": 55.275077
+    },
+    "metrics": {
+      "clients": 8200,
+      "annualVolumeAEDBn": 1.05,
+      "complianceScore": 90
+    },
+    "narration": "4T Global Markets Financial Services is a Dubai-based brokerage firm that supports securities trading and investment services across the UAE. It serves 8,200 active clients with an annual trading volume of AED 1.05 billion."
+  },
+  {
+    "name": "Saif Yousif Khamis Abdulla AlNaqbi",
+    "license": "FRP-2024-07-10",
+    "type": "Finfluencer (Financial Recommendations Provider)",
+    "status": "Active",
+    "emirate": "Abu Dhabi",
+    "issueDate": "2024-07-10",
+    "expiryDate": null,
+    "coordinates": {
+      "lat": 25.193070,
+      "lng": 55.260580
+    },
+    "metrics": {
+      "audience": 25000,
+      "recommendationSuccessPct": 62
+    },
+    "narration": "Saif Yousif Khamis Abdulla AlNaqbi is a registered financial recommendations provider. He offers public advice, analysis, and recommendations through social media channels regarding investments and virtual assets. His portfolio commentary reaches thousands across multiple platforms."
+  },
+  {
+    "name": "Abdulkareem Mohamed Ahmed Almansoori",
+    "license": "FRP-2024-07-19",
+    "type": "Finfluencer (Financial Recommendations Provider)",
+    "status": "Active",
+    "emirate": "Abu Dhabi",
+    "issueDate": "2024-07-19",
+    "expiryDate": null,
+    "coordinates": {
+      "lat": 24.453884,
+      "lng": 54.377344
+    },
+    "metrics": {
+      "audience": 18000,
+      "recommendationSuccessPct": 58
+    },
+    "narration": "Abdulkareem Mohamed Ahmed Almansoori is an authorized financial recommendations provider. He publishes analysis and guidance on market trends, investment instruments, and financial products with strong recommendation success rate and audience reach."
+  }
+]
+
+
