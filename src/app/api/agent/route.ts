@@ -1,6 +1,15 @@
 import { NextRequest } from 'next/server';
 import { HumanMessage } from '@langchain/core/messages';
 import { buildAgent } from '@/agent/graph';
+import fs from 'fs/promises';
+import path from 'path';
+
+interface Entity {
+  name: string;
+  license?: string;
+  narration?: string;
+  [key: string]: unknown;
+}
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
@@ -19,7 +28,7 @@ export async function POST(req: NextRequest) {
 
   // Check if get_company_info tool was called by looking for ToolMessage
   let entityLicense: string | null = null;
-  let entityDetails: any = null;
+  let entityDetails: Entity | null = null;
 
   console.log('[API] Checking', result.messages.length, 'messages for entity');
   for (const msg of result.messages) {
@@ -39,12 +48,10 @@ export async function POST(req: NextRequest) {
   // If we have a license, look up the full entity details dynamically
   if (entityLicense) {
     try {
-      const fs = require('fs/promises');
-      const path = require('path');
       const filePath = path.join(process.cwd(), 'src', 'knowledge', 'sca_entities.json');
       const fileContent = await fs.readFile(filePath, 'utf-8');
-      const entities = JSON.parse(fileContent);
-      entityDetails = entities.find((e: any) => String(e.license || '').toUpperCase() === entityLicense!.toUpperCase());
+      const entities: Entity[] = JSON.parse(fileContent);
+      entityDetails = entities.find((e) => String(e.license || '').toUpperCase() === entityLicense!.toUpperCase()) || null;
       console.log('[API] Found entity details:', entityDetails?.name);
     } catch (err) {
       console.error('[API] Failed to look up entity details:', err);

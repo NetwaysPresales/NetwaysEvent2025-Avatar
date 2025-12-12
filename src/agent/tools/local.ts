@@ -5,6 +5,13 @@ import path from 'path';
 // Define path to knowledge base
 const KNOWLEDGE_FILE = path.join(process.cwd(), 'src', 'knowledge', 'sca_entities.json');
 
+interface Entity {
+  name: string;
+  license?: string;
+  narration?: string;
+  [key: string]: unknown;
+}
+
 export function localRetrieverTool() {
   return tool(
     async (input: string) => {
@@ -12,7 +19,7 @@ export function localRetrieverTool() {
       console.log('[Tool] Searching for company:', key);
 
       // Load entities dynamically
-      let entities: any[] = [];
+      let entities: Entity[] = [];
       try {
         const fileContent = await fs.readFile(KNOWLEDGE_FILE, 'utf-8');
         entities = JSON.parse(fileContent);

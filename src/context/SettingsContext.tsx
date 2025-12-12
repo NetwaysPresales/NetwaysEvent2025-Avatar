@@ -30,6 +30,11 @@ interface SettingsContextType {
     logoUrl: string;
     setLogoUrl: Dispatch<SetStateAction<string>>;
 
+
+    // Backgrounds
+    bgRefreshTrigger: number;
+    refreshBackground: () => void;
+
     // Visibility
     showSpeechApiKey: boolean;
     setShowSpeechApiKey: Dispatch<SetStateAction<boolean>>;
@@ -62,6 +67,7 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
             const stored = getStored(key, defaultValue);
             setState(stored);
             setIsInitialized(true);
+            // eslint-disable-next-line react-hooks/exhaustive-deps
         }, [key]); // Run once on mount per key
 
         useEffect(() => {
@@ -90,7 +96,12 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
     const [theme, setTheme] = usePersistedState<'dark' | 'light'>('theme_v2', 'light');
     const [appTitle, setAppTitle] = usePersistedState<string>('appTitle_v3', 'Netways Avatar');
     const [appDescription, setAppDescription] = usePersistedState<string>('appDescription_v1', 'AI-powered voice assistant');
+
     const [logoUrl, setLogoUrl] = usePersistedState<string>('logoUrl_v2', '/logo.png');
+
+    // Background refresh trigger - separate from persistence as actual source is API
+    const [bgRefreshTrigger, setBgRefreshTrigger] = useState(0);
+    const refreshBackground = () => setBgRefreshTrigger(prev => prev + 1);
 
     // Validating document title and description update
     useEffect(() => {
@@ -116,6 +127,7 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
             appTitle, setAppTitle,
             appDescription, setAppDescription,
             logoUrl, setLogoUrl,
+            bgRefreshTrigger, refreshBackground,
             showSpeechApiKey, setShowSpeechApiKey,
             showOpenAIApiKey, setShowOpenAIApiKey
         }}>

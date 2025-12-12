@@ -28,7 +28,7 @@ export async function fetchICEServerCredentials(
   }
 
   const data = await response.json();
-  
+
   return {
     urls: [data.Urls[0]],
     username: data.Username,
@@ -44,8 +44,8 @@ export function createPeerConnection(
   useTcpForWebRTC: boolean = false
 ): RTCPeerConnection {
   const iceServerUrl = iceServerConfig.urls[0];
-  const modifiedUrl = useTcpForWebRTC 
-    ? iceServerUrl.replace(':3478', ':443?transport=tcp') 
+  const modifiedUrl = useTcpForWebRTC
+    ? iceServerUrl.replace(':3478', ':443?transport=tcp')
     : iceServerUrl;
 
   return new RTCPeerConnection({
@@ -72,4 +72,3 @@ export function setupTransceivers(peerConnection: RTCPeerConnection): void {
 export function createDataChannel(peerConnection: RTCPeerConnection): RTCDataChannel {
   return peerConnection.createDataChannel('eventChannel');
 }
-

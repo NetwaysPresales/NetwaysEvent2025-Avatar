@@ -17,23 +17,12 @@ export default function LandingPage() {
     speechConfig, setSpeechConfig,
     avatarConfig, setAvatarConfig,
     openAIConfig, setOpenAIConfig,
-    sttConfig,
+    bgRefreshTrigger, refreshBackground,
     showSpeechApiKey, setShowSpeechApiKey,
     showOpenAIApiKey, setShowOpenAIApiKey
   } = useSettings();
 
   const [isConfigExpanded, setIsConfigExpanded] = useState(false);
-  const [isPortrait, setIsPortrait] = useState(false);
-
-  useEffect(() => {
-    const checkOrientation = () => {
-      const portrait = window.matchMedia('(orientation: portrait)').matches;
-      setIsPortrait(portrait);
-    };
-    checkOrientation();
-    window.addEventListener('resize', checkOrientation);
-    return () => window.removeEventListener('resize', checkOrientation);
-  }, []);
 
   const handleStartSession = () => {
     router.push('/avatar');
@@ -70,11 +59,12 @@ export default function LandingPage() {
         setAppDescription={setAppDescription}
         logoUrl={logoUrl}
         setLogoUrl={setLogoUrl}
+        bgRefreshTrigger={bgRefreshTrigger}
+        refreshBackground={refreshBackground}
         showSpeechApiKey={showSpeechApiKey}
         setShowSpeechApiKey={setShowSpeechApiKey}
         showOpenAIApiKey={showOpenAIApiKey}
         setShowOpenAIApiKey={setShowOpenAIApiKey}
-        onStartSession={handleStartSession}
       />
     </main>
   );

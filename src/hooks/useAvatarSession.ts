@@ -46,58 +46,12 @@ export function useAvatarSession({
     onStateChange?.(newState);
   }, [onStateChange]);
 
-  const isStartingRef = useRef<boolean>(false);
-
-  // Helper to safely close everything
-  const cleanupSession = useCallback(() => {
-    console.log('[Avatar] cleanupSession called');
-    if (avatarSynthesizerRef.current) {
-      try {
-        avatarSynthesizerRef.current.close();
-      } catch (e) {
-        console.warn('Error closing synthesizer:', e);
-      }
-      avatarSynthesizerRef.current = null;
-    }
-    if (peerConnectionRef.current) {
-      try {
-        peerConnectionRef.current.close();
-      } catch (e) {
-        console.warn('Error closing peer connection:', e);
-      }
-      peerConnectionRef.current = null;
-    }
-    isStartingRef.current = false;
-    sessionActiveRef.current = false;
-    isReconnectingRef.current = false;
-  }, []);
-
   // Forward declaration for startSession
   const startSessionRef = useRef<(() => Promise<void>) | null>(null);
 
   // Start avatar session
   const startSession = useCallback(async () => {
-    // Prevent concurrent starts
-    if (isStartingRef.current) {
-      console.warn('[Avatar] Session start already in progress, ignoring.');
-      return;
-    }
-
-    // Check if we already have an active session that looks healthy
-    if (sessionActiveRef.current && peerConnectionRef.current?.iceConnectionState === 'connected') {
-      console.warn('[Avatar] Session already active and connected, ignoring start request.');
-      return;
-    }
-
     try {
-      isStartingRef.current = true;
-
-      // Ensure previous session is fully cleaned up
-      cleanupSession();
-
-      // Add a small delay to allow Azure to release the session server-side
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
       updateState('connecting');
       setError(null);
 
@@ -126,7 +80,7 @@ export function useAvatarSession({
           audioElement.autoplay = false;
           audioElement.muted = true; // Initially muted for autoplay
           audioElement.addEventListener('loadeddata', () => {
-            audioElement.play();
+            audioElement.play().catch(e => console.warn('Avatar internal audio play prevented:', e));
           });
           onAudioTrack?.(audioElement);
         }
@@ -285,52 +239,38 @@ export function useAvatarSession({
           updateState('connected');
         }, 5000);
       } else {
-        console.error('[Avatar] Start failed with reason:', result.reason, 'Error details:', result.errorDetails);
-        if (result.reason === SpeechSDK.ResultReason.Canceled) {
-          throw new Error(`Failed to start avatar: Canceled. ${result.errorDetails || 'No details provided'}`);
-        }
-        throw new Error(`Failed to start avatar: ${result.reason}`);
+        console.error('[Avatar] Start failed:', result.reason, result.errorDetails);
+        throw new Error(`Failed to start avatar: ${result.reason}. Details: ${result.errorDetails}`);
       }
 
     } catch (err) {
       console.error('Error starting avatar session:', err);
       setError(err instanceof Error ? err.message : 'Failed to start session');
       updateState('error');
-      // Force cleanup on error to ensure we don't leak
-      cleanupSession();
-    } finally {
-      isStartingRef.current = false;
     }
-  }, [speechConfig, avatarConfig, ttsConfig, onVideoTrack, onAudioTrack, onEvent, updateState, autoReconnectMs, cleanupSession]);
+  }, [speechConfig, avatarConfig, ttsConfig, onVideoTrack, onAudioTrack, onEvent, updateState, autoReconnectMs]);
 
   // Store startSession in ref for reconnect
   useEffect(() => {
     startSessionRef.current = startSession;
   }, [startSession]);
 
-  // Stop session
-  const stopSession = useCallback(async () => {
-    console.log('[Avatar] Stopping session...');
-    cleanupSession();
-    updateState('disconnected');
-  }, [cleanupSession, updateState]);
-
-  // Cleanup on unmount and page events
-  useEffect(() => {
-    const handleUnload = () => {
-      // Attempt to close synchronously if possible, or trigger cleanup
-      cleanupSession();
-    };
-
-    window.addEventListener('beforeunload', handleUnload);
-    window.addEventListener('pagehide', handleUnload);
-
-    return () => {
-      window.removeEventListener('beforeunload', handleUnload);
-      window.removeEventListener('pagehide', handleUnload);
-      cleanupSession();
-    };
-  }, [cleanupSession]);
+  // Stop avatar session
+  const stopSession = useCallback(() => {
+    sessionActiveRef.current = false;
+    if (avatarSynthesizerRef.current) {
+      avatarSynthesizerRef.current.close();
+      avatarSynthesizerRef.current = null;
+    }
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
+    }
+    speechQueueRef.current = [];
+    currentSpeechRef.current = '';
+    setIsSpeaking(false);
+    updateState('idle');
+  }, [updateState]);
 
   // Speak text
   const speak = useCallback(async (text: string, endingSilenceMs: number = 0) => {
@@ -409,4 +349,3 @@ export function useAvatarSession({
     stopSpeaking
   };
 }
-

@@ -151,10 +151,10 @@ export function useGreenScreen() {
         programRef.current = program;
 
         // Look up locations
-        const positionLocation = gl.getAttribLocation(program, "a_position");
-        const texCoordLocation = gl.getAttribLocation(program, "a_texCoord");
+        // const positionLocation = gl.getAttribLocation(program, "a_position"); // Unused in this simplified setup?
+        // const texCoordLocation = gl.getAttribLocation(program, "a_texCoord"); // Unused
         const texStepLocation = gl.getUniformLocation(program, "u_texStep");
-        texStepLocationRef.current = texStepLocation; // Store the uniform location
+        texStepLocationRef.current = texStepLocation;
 
         // Provide texture coordinates for the rectangle.
         const texCoordBuffer = gl.createBuffer();
@@ -265,30 +265,7 @@ export function useGreenScreen() {
             gl.uniform2f(texStepLocationRef.current, 1.0 / vw, 1.0 / vh);
         }
 
-        let scaleX = 1.0;
-        let scaleY = 1.0;
-
         // We want avatar at 80% height (AVATAR_SCALE_FACTOR)
-        // Standard "cover" logic:
-        if (canvasAspect > videoAspect) {
-            // Canvas is wider than video (crop top/bottom usually, but we want scaling)
-            // If we just fit width, height is huge.
-            // We want to scale video so its height is AVATAR_SCALE_FACTOR * ch
-            // But 'cover' means filling the screen.
-
-            // Reverting to previous logic: Fill screen, but maintain aspect ratio, processing crop in Vertex Shader or via geometry?
-            // Simplest in WebGL: Draw full quad (-1 to 1), but scale texCoords? 
-            // Or Draw scaled quad?
-            // Let's draw a quad that covers the screen properly.
-
-            // If Canvas is wider: 
-            // To cover width, we scale Y up.
-            scaleY = canvasAspect / videoAspect;
-        } else {
-            // Canvas is taller:
-            // To cover height, we scale X up.
-            scaleX = videoAspect / canvasAspect;
-        }
 
         // Apply Avatar Scale Factor hack? 
         // The original efficient code did a complex drawImage. 

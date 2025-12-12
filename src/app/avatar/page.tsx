@@ -3,11 +3,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useAvatarSession } from '@/hooks/useAvatarSession';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { validateSpeechConfig, validateAzureOpenAIConfig } from '@/lib/config';
 import { CompanyInfoCards } from '@/components/CompanyInfoCards';
-import { OverlayBackground } from '@/components/OverlayBackground';
+import { AvatarBackground } from '@/components/AvatarBackground';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { useGreenScreen } from '@/hooks/useGreenScreen';
 import { useAgent } from '@/hooks/useAgent';
@@ -18,18 +20,65 @@ const RECONNECT_TIMEOUT_MS = 3600000;
 const COMPANY_INFO_SHOW_DELAY_MS = 300;
 const COMPANY_INFO_HIDE_DELAY_MS = 2000;
 
+// Helper to clean markdown for TTS
+const cleanTextForTTS = (text: string) => {
+    return text
+        .replace(/[#*`_\[\]()-]/g, '') // Remove common markdown symbols
+        .replace(/\s+/g, ' ')           // Collapse multiple spaces
+        .trim();
+};
+
 export default function AvatarPage() {
     const router = useRouter();
     const {
         speechConfig, avatarConfig, ttsConfig, openAIConfig, sttConfig,
-        theme
+        theme, bgRefreshTrigger
     } = useSettings();
+
+    // Auto-scroll ref
+    const subtitlesEndRef = useRef<HTMLDivElement>(null);
+    const subtitlesContainerRef = useRef<HTMLDivElement>(null);
 
     const [currentSubtitle, setCurrentSubtitle] = useState('');
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [isRecording, setIsRecording] = useState(false);
     const [avatarSessionStarted, setAvatarSessionStarted] = useState(false);
     const [isAvatarReady, setIsAvatarReady] = useState(false);
+
+    // Audio Autoplay Handling
+    const [isAudioMuted, setIsAudioMuted] = useState(false);
+    const handleUnmute = useCallback(() => {
+        const container = document.getElementById('avatarAudioContainer');
+        if (container) {
+            Array.from(container.children).forEach(child => {
+                if (child instanceof HTMLAudioElement) {
+                    child.muted = false;
+                    child.play().catch(e => console.warn('Unmute play failed:', e));
+                }
+            });
+            setIsAudioMuted(false);
+        }
+    }, []);
+
+    // Initialization Timeout for Reset Option
+    const [showResetOption, setShowResetOption] = useState(false);
+    useEffect(() => {
+        if (!avatarSessionStarted) {
+            const timer = setTimeout(() => setShowResetOption(true), 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [avatarSessionStarted]);
+
+    const handleResetConfig = () => {
+        // Clear local storage keys to force re-render with env defaults
+        try {
+            window.localStorage.removeItem('speechConfig_v2');
+            window.localStorage.removeItem('openAIConfig_v2');
+            window.location.reload();
+        } catch (e) {
+            console.error('Failed to reset config:', e);
+        }
+    };
 
     const micRef = useRef<HTMLDivElement>(null);
 
@@ -107,10 +156,23 @@ export default function AvatarPage() {
                     Array.from(container.children).forEach(child => {
                         if (child.tagName === 'AUDIO') container.removeChild(child);
                     });
+
+                    container.appendChild(element);
+
+                    // Try playing unmuted first
                     element.muted = false;
                     element.volume = 1.0;
-                    container.appendChild(element);
-                    element.play().catch(err => console.warn('Audio autoplay prevented:', err));
+
+                    const playPromise = element.play();
+                    if (playPromise !== undefined) {
+                        playPromise.catch(error => {
+                            console.warn('Auto-play prevented (NotAllowedError). Falling back to muted.', error);
+                            // Fallback: Mute and play
+                            element.muted = true;
+                            element.play().catch(e => console.error('Muted play failed:', e));
+                            setIsAudioMuted(true);
+                        });
+                    }
                 }
             }
         },
@@ -149,7 +211,8 @@ export default function AvatarPage() {
             const reply = await sendMessage(text);
             if (reply) {
                 setCurrentSubtitle(`Avatar: ${reply}`);
-                speak(reply);
+                // Clean text before sending to TTS to avoid reading markdown symbols
+                speak(cleanTextForTTS(reply));
             }
         },
         onRecognizing: () => {
@@ -169,11 +232,31 @@ export default function AvatarPage() {
         await startSession();
     }, [speechConfig, openAIConfig, startSession]);
 
-    // Auto-start session on mount
+    // Auto-start session on mount - STRICT RUN ONCE
+    const hasStartedRef = useRef(false);
     useEffect(() => {
-        handleStartSession();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []); // Run once on mount
+        // Strict guard: never run if already blocked or started
+        if (hasStartedRef.current || avatarSessionStarted) return;
+
+        console.log('[AvatarPage] Auto-starting session...');
+        hasStartedRef.current = true;
+
+        // Small delay to ensure clean mount
+        const timer = setTimeout(() => {
+            handleStartSession().catch(e => {
+                console.error("Auto-start failed:", e);
+                setErrorMessage("Auto-start failed. Please try manually.");
+                setAvatarSessionStarted(false); // Valid to allow retry if needed
+            });
+        }, 500);
+
+        return () => {
+            clearTimeout(timer);
+            // Reset ref on unmount so re-entry works
+            hasStartedRef.current = false;
+        };
+    }, []); // Empty dependency array to ensure absolutely single execution check
+
 
     // Mic interaction
     const handleMicPress = useCallback(() => {
@@ -222,11 +305,39 @@ export default function AvatarPage() {
         if (isConnected) setIsAvatarReady(true);
     }, [isConnected]);
 
+    // Internal auto-scroll
+    useEffect(() => {
+        if (subtitlesEndRef.current) {
+            subtitlesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+        // Also ensure container is scrolled
+        if (subtitlesContainerRef.current) {
+            subtitlesContainerRef.current.scrollTop = subtitlesContainerRef.current.scrollHeight;
+        }
+    }, [currentSubtitle]);
+
     return (
         <main className={`relative w-full h-screen overflow-hidden ${theme === 'light' ? 'bg-zinc-50' : 'bg-black'}`}>
 
-            <OverlayBackground theme={theme} />
+
+            <AvatarBackground theme={theme} refreshTrigger={bgRefreshTrigger} />
             <LoadingOverlay theme={theme} isVisible={isConnecting && !isAvatarReady} message="Connecting to Avatar..." />
+
+            {/* Audio Blocked Toast */}
+            <AnimatePresence>
+                {isAudioMuted && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -20, x: '-50%' }}
+                        animate={{ opacity: 1, y: 0, x: '-50%' }}
+                        exit={{ opacity: 0, y: -20, x: '-50%' }}
+                        className="absolute top-24 left-1/2 z-50 flex items-center gap-3 px-6 py-3 rounded-full bg-red-500/90 text-white shadow-2xl backdrop-blur-md cursor-pointer hover:bg-red-600 transition-colors"
+                        onClick={handleUnmute}
+                    >
+                        <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" /></svg>
+                        <span className="font-medium text-sm whitespace-nowrap">Audio Muted. Click to Unmute</span>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* Back Button */}
             <div className="absolute top-6 left-6 z-50">
@@ -235,6 +346,9 @@ export default function AvatarPage() {
                     whileTap={{ scale: 0.95 }}
                     onClick={() => {
                         stopSession();
+                        // Reset state for clean re-entry
+                        setAvatarSessionStarted(false);
+                        setErrorMessage(null);
                         router.push('/');
                     }}
                     className={`flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur-md ${theme === 'light' ? 'bg-white/80 hover:bg-white text-zinc-600' : 'bg-black/50 hover:bg-black/70 text-zinc-400'} border ${theme === 'light' ? 'border-zinc-200' : 'border-white/10'} transition-all`}
@@ -243,6 +357,18 @@ export default function AvatarPage() {
                     <span className="text-sm font-medium">End Session</span>
                 </motion.button>
             </div>
+
+
+
+            {/* Error Display - Visible even if session not started so validation errors show */}
+            {(errorMessage || avatarError) && (
+                <div className="absolute top-20 left-1/2 transform -translate-x-1/2 z-50 max-w-md w-full px-4">
+                    <div className="bg-red-500/90 backdrop-blur-md text-white rounded-lg p-4 shadow-xl flex items-center gap-3">
+                        <svg className="w-6 h-6 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                        <p className="font-medium text-sm">{errorMessage || avatarError}</p>
+                    </div>
+                </div>
+            )}
 
             {avatarSessionStarted && (
                 <>
@@ -264,8 +390,16 @@ export default function AvatarPage() {
                     <AnimatePresence>
                         {currentSubtitle && (
                             <div className="absolute top-24 left-0 right-0 z-30 flex justify-center px-4 pointer-events-none">
-                                <div className={`max-w-2xl text-center p-4 rounded-xl backdrop-blur-md ${theme === 'light' ? 'bg-white/80 text-zinc-800 shadow-sm border border-zinc-200' : 'bg-black/50 text-white shadow-lg border border-white/10'}`}>
-                                    <p className="text-lg font-light leading-relaxed">{currentSubtitle}</p>
+                                <div
+                                    ref={subtitlesContainerRef}
+                                    className={`max-w-2xl w-full text-center p-4 rounded-xl backdrop-blur-md max-h-24 overflow-y-auto ${theme === 'light' ? 'bg-white/80 text-zinc-800 shadow-sm border border-zinc-200' : 'bg-black/50 text-white shadow-lg border border-white/10'}`}
+                                >
+                                    <div className="prose prose-sm md:prose-base dark:prose-invert max-w-none text-left inline-block w-full">
+                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                            {currentSubtitle}
+                                        </ReactMarkdown>
+                                        <div ref={subtitlesEndRef} />
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -311,14 +445,6 @@ export default function AvatarPage() {
                         </div>
                     </div>
 
-                    {/* Error Display */}
-                    {(errorMessage || avatarError) && (
-                        <div className="absolute top-20 left-1/2 transform -translate-x-1/2 z-50 max-w-md">
-                            <div className="bg-red-500/90 backdrop-blur-md text-white rounded-lg p-4 shadow-2xl">
-                                <p>{errorMessage || avatarError}</p>
-                            </div>
-                        </div>
-                    )}
                 </>
             )}
 

@@ -1,6 +1,7 @@
 
-import React, { Dispatch, SetStateAction, useState, useEffect, useRef } from 'react';
+import React, { Dispatch, SetStateAction, useState, useEffect } from 'react';
 import Image from 'next/image';
+import { AvatarBackground } from '@/components/AvatarBackground';
 import type { AvatarConfig, SpeechConfig, AzureOpenAIConfig } from '@/types/avatar';
 
 type Props = {
@@ -26,14 +27,14 @@ type Props = {
     setAppDescription: Dispatch<SetStateAction<string>>;
     logoUrl: string;
     setLogoUrl: Dispatch<SetStateAction<string>>;
+    bgRefreshTrigger: number;
+    refreshBackground: () => void;
 
     // Visibility States
     showSpeechApiKey: boolean;
     setShowSpeechApiKey: Dispatch<SetStateAction<boolean>>;
     showOpenAIApiKey: boolean;
     setShowOpenAIApiKey: Dispatch<SetStateAction<boolean>>;
-
-    onStartSession: () => void;
 };
 
 export const SettingsPanel = ({
@@ -53,17 +54,41 @@ export const SettingsPanel = ({
     setAppDescription,
     logoUrl,
     setLogoUrl,
+    bgRefreshTrigger,
+    refreshBackground,
     showSpeechApiKey,
     setShowSpeechApiKey,
     showOpenAIApiKey,
-    setShowOpenAIApiKey,
-    onStartSession
+    setShowOpenAIApiKey
 }: Props) => {
     // Tab state
-    const [activeTab, setActiveTab] = useState<'settings' | 'knowledge'>('settings');
+    const [activeTab, setActiveTab] = useState<'settings' | 'appearance' | 'knowledge'>('settings');
+
+    // ... existing state ...
+
     const [knowledgeFiles, setKnowledgeFiles] = useState<string[]>([]);
     const [isUploading, setIsUploading] = useState(false);
     const [uploadError, setUploadError] = useState<string | null>(null);
+    const [bgFilename, setBgFilename] = useState<string | null>(null);
+
+    // Fetch background info
+    useEffect(() => {
+        const fetchBg = async () => {
+            try {
+                const res = await fetch('/api/avatar/background?t=' + Date.now());
+                const data = await res.json();
+                if (data.url) {
+                    const name = data.url.split('/').pop();
+                    setBgFilename(name || 'Custom Background');
+                } else {
+                    setBgFilename(null);
+                }
+            } catch {
+                setBgFilename(null);
+            }
+        };
+        fetchBg();
+    }, [bgRefreshTrigger]);
 
     // Fetch knowledge files on open or tab switch
     useEffect(() => {
@@ -105,10 +130,37 @@ export const SettingsPanel = ({
             await fetchKnowledgeFiles();
             // Clear input
             e.target.value = '';
-        } catch (err) {
+        } catch {
             setUploadError('Failed to upload file');
         } finally {
             setIsUploading(false);
+        }
+    };
+
+    const handleBgUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // setIsUploading(true); // Reuse uploading state logic or add new one? 
+        // Let's keep it simple and just upload. Maybe add a toast or simple alert in next iteration if needed.
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            const res = await fetch('/api/upload/avatar-bg', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!res.ok) throw new Error('Upload failed');
+
+            const data = await res.json();
+            if (data.url) {
+                refreshBackground();
+            }
+        } catch (err) {
+            console.error('Failed to upload background', err);
         }
     };
 
@@ -137,6 +189,12 @@ export const SettingsPanel = ({
                             className={`text-xl font-light tracking-wide transition-colors ${activeTab === 'settings' ? (theme === 'light' ? 'text-zinc-900' : 'text-zinc-100') : (theme === 'light' ? 'text-zinc-400 hover:text-zinc-600' : 'text-zinc-500 hover:text-zinc-300')}`}
                         >
                             Settings
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('appearance')}
+                            className={`text-xl font-light tracking-wide transition-colors ${activeTab === 'appearance' ? (theme === 'light' ? 'text-zinc-900' : 'text-zinc-100') : (theme === 'light' ? 'text-zinc-400 hover:text-zinc-600' : 'text-zinc-500 hover:text-zinc-300')}`}
+                        >
+                            Appearance
                         </button>
                         <button
                             onClick={() => setActiveTab('knowledge')}
@@ -186,13 +244,24 @@ div::-webkit-scrollbar-thumb:hover, textarea::-webkit-scrollbar-thumb:hover {
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div>
                                             <label className={`block text-xs font-light ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-400'} mb-1.5 uppercase tracking-wide`}>Character</label>
-                                            <input
-                                                type="text"
-                                                value={avatarConfig.character}
-                                                onChange={(e) => setAvatarConfig({ ...avatarConfig, character: e.target.value })}
-                                                disabled={isConnected}
-                                                className={`w-full px-4 py-2.5 ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900' : 'bg-zinc-950 border-zinc-800 text-zinc-200'} border rounded-lg focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed ${theme === 'light' ? 'placeholder-zinc-400' : 'placeholder-zinc-700'} font-light`}
-                                            />
+                                            <div className="relative">
+                                                <select
+                                                    value={avatarConfig.character}
+                                                    onChange={(e) => setAvatarConfig({ ...avatarConfig, character: e.target.value })}
+                                                    disabled={isConnected}
+                                                    className={`w-full px-4 py-2.5 pr-10 appearance-none ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900' : 'bg-zinc-950 border-zinc-800 text-zinc-200'} border rounded-lg focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed font-light`}
+                                                >
+                                                    <option value="Meg">Meg</option>
+                                                    <option value="Harry">Harry</option>
+                                                    <option value="Lisa">Lisa</option>
+                                                    <option value="Jeff">Jeff</option>
+                                                </select>
+                                                <div className={`absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                    </svg>
+                                                </div>
+                                            </div>
                                         </div>
                                         <div>
                                             <label className={`block text-xs font-light ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-400'} mb-1.5 uppercase tracking-wide`}>Style</label>
@@ -223,63 +292,6 @@ div::-webkit-scrollbar-thumb:hover, textarea::-webkit-scrollbar-thumb:hover {
                                                 className={`w-full px-4 py-2.5 ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900' : 'bg-zinc-950 border-zinc-800 text-zinc-200'} border rounded-lg focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50 outline-none transition-all ${theme === 'light' ? 'placeholder-zinc-400' : 'placeholder-zinc-700'} font-light`}
                                             />
                                         </div>
-                                        <div className="md:col-span-2">
-                                            <label className={`block text-xs font-light ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-400'} mb-1.5 uppercase tracking-wide`}>App Icon</label>
-                                            <div
-                                                className={`flex items-center gap-4 p-4 ${theme === 'light' ? 'bg-zinc-50 border-zinc-300' : 'bg-zinc-950 border-zinc-800'} border rounded-lg outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50 transition-all cursor-pointer group`}
-                                                tabIndex={0}
-                                                onPaste={(e) => {
-                                                    const items = e.clipboardData.items;
-                                                    for (let i = 0; i < items.length; i++) {
-                                                        if (items[i].type.indexOf('image') !== -1) {
-                                                            const blob = items[i].getAsFile();
-                                                            if (blob) {
-                                                                const reader = new FileReader();
-                                                                reader.onload = (event) => {
-                                                                    if (event.target?.result) {
-                                                                        setLogoUrl(event.target.result as string);
-                                                                    }
-                                                                };
-                                                                reader.readAsDataURL(blob);
-                                                            }
-                                                            break;
-                                                        }
-                                                    }
-                                                }}
-                                            >
-                                                <div className={`relative w-16 h-16 ${theme === 'light' ? 'bg-zinc-100 border-zinc-300' : 'bg-zinc-900 border-zinc-800'} rounded-lg border flex items-center justify-center overflow-hidden shrink-0`}>
-                                                    <Image
-                                                        src={logoUrl}
-                                                        alt="Icon Preview"
-                                                        fill
-                                                        className="object-contain p-2"
-                                                        onError={() => setLogoUrl('/logo.png')}
-                                                    />
-                                                </div>
-                                                <div className="flex-1">
-                                                    <input
-                                                        type="file"
-                                                        accept="image/*"
-                                                        onChange={(e) => {
-                                                            const file = e.target.files?.[0];
-                                                            if (file) {
-                                                                const reader = new FileReader();
-                                                                reader.onload = (e) => {
-                                                                    if (e.target?.result) {
-                                                                        setLogoUrl(e.target.result as string);
-                                                                    }
-                                                                };
-                                                                reader.readAsDataURL(file);
-                                                            }
-                                                        }}
-                                                        className="w-full text-sm text-zinc-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-medium file:bg-emerald-500 file:text-white hover:file:bg-emerald-600 cursor-pointer"
-                                                    />
-                                                    <p className={`mt-2 text-xs ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>
-                                                        Upload an image or <span className="text-emerald-500 font-medium">paste from clipboard</span> (Ctrl+V)
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        </div>
                                     </div>
                                 </div>
 
@@ -289,16 +301,23 @@ div::-webkit-scrollbar-thumb:hover, textarea::-webkit-scrollbar-thumb:hover {
                                     <div className="space-y-4">
                                         <div>
                                             <label className={`block text-xs font-light ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-400'} mb-1.5 uppercase tracking-wide`}>Region</label>
-                                            <select
-                                                value={speechConfig.region}
-                                                onChange={(e) => setSpeechConfig({ ...speechConfig, region: e.target.value })}
-                                                disabled={isConnected}
-                                                className={`w-full px-4 py-2.5 ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900' : 'bg-zinc-950 border-zinc-800 text-zinc-200'} border rounded-lg focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed font-light`}
-                                            >
-                                                <option value="westeurope">West Europe</option>
-                                                <option value="eastus2">East US 2</option>
-                                                <option value="westus2">West US 2</option>
-                                            </select>
+                                            <div className="relative">
+                                                <select
+                                                    value={speechConfig.region}
+                                                    onChange={(e) => setSpeechConfig({ ...speechConfig, region: e.target.value })}
+                                                    disabled={isConnected}
+                                                    className={`w-full px-4 py-2.5 pr-10 appearance-none ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900' : 'bg-zinc-950 border-zinc-800 text-zinc-200'} border rounded-lg focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed font-light`}
+                                                >
+                                                    <option value="westeurope">West Europe</option>
+                                                    <option value="eastus2">East US 2</option>
+                                                    <option value="westus2">West US 2</option>
+                                                </select>
+                                                <div className={`absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                    </svg>
+                                                </div>
+                                            </div>
                                         </div>
                                         <div>
                                             <label className={`block text-xs font-light ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-400'} mb-1.5 uppercase tracking-wide`}>API Key</label>
@@ -399,6 +418,156 @@ div::-webkit-scrollbar-thumb:hover, textarea::-webkit-scrollbar-thumb:hover {
                                                     }}
                                                     placeholder="You are a helpful assistant..."
                                                 />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'appearance' && (
+                            <div className="space-y-6">
+                                {/* Company Icon */}
+                                <div>
+                                    <h3 className="text-sm font-medium text-emerald-500 uppercase tracking-wider mb-4">Company Branding</h3>
+                                    <div className={`p-4 rounded-xl border ${theme === 'light' ? 'bg-white border-zinc-200' : 'bg-zinc-900/50 border-zinc-800'}`}>
+                                        <div className="flex items-start gap-4">
+                                            <div className={`relative w-20 h-20 ${theme === 'light' ? 'bg-zinc-100 border-zinc-300' : 'bg-zinc-900 border-zinc-800'} rounded-lg border flex items-center justify-center overflow-hidden shrink-0`}>
+                                                <Image
+                                                    src={logoUrl}
+                                                    alt="Icon Preview"
+                                                    fill
+                                                    className="object-contain p-2"
+                                                    onError={() => setLogoUrl('/logo.png')}
+                                                />
+                                            </div>
+                                            <div
+                                                className="flex-1 outline-none"
+                                                tabIndex={0}
+                                                onPaste={(e) => {
+                                                    const items = e.clipboardData.items;
+                                                    for (let i = 0; i < items.length; i++) {
+                                                        if (items[i].type.indexOf('image') !== -1) {
+                                                            const blob = items[i].getAsFile();
+                                                            if (blob) {
+                                                                const reader = new FileReader();
+                                                                reader.onload = (event) => {
+                                                                    if (event.target?.result) {
+                                                                        setLogoUrl(event.target.result as string);
+                                                                    }
+                                                                };
+                                                                reader.readAsDataURL(blob);
+                                                            }
+                                                            break;
+                                                        }
+                                                    }
+                                                }}
+                                            >
+                                                <label className={`block text-xs font-light ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-400'} mb-2 uppercase tracking-wide`}>Company Icon</label>
+                                                <div className="flex items-center gap-3 mb-2">
+                                                    <label className="cursor-pointer bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-medium py-2 px-4 rounded-full transition-colors shrink-0">
+                                                        Choose File
+                                                        <input
+                                                            type="file"
+                                                            accept="image/*"
+                                                            onChange={(e) => {
+                                                                const file = e.target.files?.[0];
+                                                                if (file) {
+                                                                    const reader = new FileReader();
+                                                                    reader.onload = (e) => {
+                                                                        if (e.target?.result) {
+                                                                            setLogoUrl(e.target.result as string);
+                                                                        }
+                                                                    };
+                                                                    reader.readAsDataURL(file);
+                                                                }
+                                                            }}
+                                                            className="hidden"
+                                                        />
+                                                    </label>
+                                                    <span className={`text-xs ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                                                        Upload or click area to paste
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Avatar Background */}
+                                <div>
+                                    <h3 className="text-sm font-medium text-emerald-500 uppercase tracking-wider mb-4">Background</h3>
+                                    <div className={`p-4 rounded-xl border ${theme === 'light' ? 'bg-white border-zinc-200' : 'bg-zinc-900/50 border-zinc-800'}`}>
+                                        <div className="flex items-start gap-4">
+                                            <div className={`relative w-40 h-24 ${theme === 'light' ? 'bg-zinc-100 border-zinc-300' : 'bg-zinc-900 border-zinc-800'} rounded-lg border overflow-hidden shrink-0`}>
+                                                <AvatarBackground theme={theme} refreshTrigger={bgRefreshTrigger} />
+                                            </div>
+                                            <div
+                                                className="flex-1 outline-none"
+                                                tabIndex={0}
+                                                // Background paste handling implementation is needed if generic paste is supported, 
+                                                // but current requirement was mainly for decoupling. 
+                                                // We can implement paste for background too if user wants complete consistency.
+                                                // Let's add basic paste handler.
+                                                onPaste={(e) => {
+                                                    const items = e.clipboardData.items;
+                                                    for (let i = 0; i < items.length; i++) {
+                                                        const item = items[i];
+                                                        if (item.type.indexOf('image') !== -1 || item.type.indexOf('video') !== -1) {
+                                                            const file = item.getAsFile();
+                                                            if (file) {
+                                                                // Manual upload trigger
+                                                                const formData = new FormData();
+                                                                formData.append('file', file);
+                                                                fetch('/api/upload/avatar-bg', {
+                                                                    method: 'POST',
+                                                                    body: formData
+                                                                }).then(async res => {
+                                                                    const data = await res.json();
+                                                                    if (data.url) refreshBackground();
+                                                                });
+                                                            }
+                                                            break;
+                                                        }
+                                                    }
+                                                }}
+                                            >
+                                                <label className={`block text-xs font-light ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-400'} mb-2 uppercase tracking-wide`}>Avatar Background</label>
+                                                <div className="flex items-center gap-3 mb-2">
+                                                    <label className="cursor-pointer bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-medium py-2 px-4 rounded-full transition-colors shrink-0">
+                                                        Choose File
+                                                        <input
+                                                            type="file"
+                                                            accept="image/*,video/*"
+                                                            onChange={handleBgUpload}
+                                                            className="hidden"
+                                                        />
+                                                    </label>
+                                                    <span className={`text-xs truncate ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                                                        {bgFilename || 'No file chosen'}
+                                                    </span>
+                                                </div>
+                                                <div className="flex justify-between items-center">
+                                                    <p className={`text-xs ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                                                        Click here to <span className="text-emerald-500 font-medium">focus & paste</span> (Ctrl+V)
+                                                    </p>
+                                                    {bgFilename && (
+                                                        <button
+                                                            onClick={async () => {
+                                                                if (!confirm('Remove custom background?')) return;
+                                                                try {
+                                                                    await fetch('/api/avatar/background', { method: 'DELETE' });
+                                                                    refreshBackground();
+                                                                } catch (err) {
+                                                                    console.error('Failed to remove background', err);
+                                                                }
+                                                            }}
+                                                            className="text-xs text-red-500 hover:text-red-600 font-medium px-2 py-1 rounded hover:bg-red-50 transition-colors"
+                                                        >
+                                                            Remove
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
