@@ -306,13 +306,43 @@ export default function AvatarPage() {
     }, [isConnected]);
 
     // Internal auto-scroll
+    // Internal auto-scroll
     useEffect(() => {
-        if (subtitlesEndRef.current) {
-            subtitlesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-        }
-        // Also ensure container is scrolled
-        if (subtitlesContainerRef.current) {
-            subtitlesContainerRef.current.scrollTop = subtitlesContainerRef.current.scrollHeight;
+        const container = subtitlesContainerRef.current;
+        if (!container || !currentSubtitle) return;
+
+        // Must explicitly reset to top first so user sees the start
+        container.scrollTop = 0;
+
+        // Check if content overflows
+        if (container.scrollHeight > container.clientHeight) {
+            let scrollFrameId: number;
+            let timeoutId: NodeJS.Timeout;
+
+            // Wait before starting to scroll to let user read the beginning
+            timeoutId = setTimeout(() => {
+                // Target: ~3 words/second match
+                // Assumption: ~10 words/line, ~24px line height -> ~3.3s/line -> ~7px/s
+                // at 60fps: 7/60 ~= 0.12 pixels/frame
+                const scrollSpeed = 0.12;
+                let currentScroll = 0;
+                const maxScroll = container.scrollHeight - container.clientHeight;
+
+                const animateScroll = () => {
+                    if (currentScroll < maxScroll) {
+                        currentScroll += scrollSpeed;
+                        container.scrollTop = currentScroll;
+                        scrollFrameId = requestAnimationFrame(animateScroll);
+                    }
+                };
+
+                scrollFrameId = requestAnimationFrame(animateScroll);
+            }, 2000); // 2 second delay before scrolling starts
+
+            return () => {
+                clearTimeout(timeoutId);
+                cancelAnimationFrame(scrollFrameId);
+            };
         }
     }, [currentSubtitle]);
 
@@ -390,9 +420,16 @@ export default function AvatarPage() {
                     <AnimatePresence>
                         {currentSubtitle && (
                             <div className="absolute top-24 left-0 right-0 z-30 flex justify-center px-4 pointer-events-none">
-                                <div
+                                <motion.div
                                     ref={subtitlesContainerRef}
-                                    className={`max-w-2xl w-full text-center p-4 rounded-xl backdrop-blur-md max-h-24 overflow-y-auto ${theme === 'light' ? 'bg-white/80 text-zinc-800 shadow-sm border border-zinc-200' : 'bg-black/50 text-white shadow-lg border border-white/10'}`}
+                                    initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
+                                    transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                                    className={`max-w-2xl w-full text-center p-6 pr-2 rounded-2xl backdrop-blur-xl max-h-20 overflow-y-auto sleek-scrollbar pointer-events-auto shadow-2xl ${theme === 'light'
+                                        ? 'bg-white/90 text-zinc-800 border-white/50'
+                                        : 'bg-black/60 text-white border-white/10'
+                                        } border`}
                                 >
                                     <div className="prose prose-sm md:prose-base dark:prose-invert max-w-none text-left inline-block w-full">
                                         <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -400,7 +437,7 @@ export default function AvatarPage() {
                                         </ReactMarkdown>
                                         <div ref={subtitlesEndRef} />
                                     </div>
-                                </div>
+                                </motion.div>
                             </div>
                         )}
                     </AnimatePresence>

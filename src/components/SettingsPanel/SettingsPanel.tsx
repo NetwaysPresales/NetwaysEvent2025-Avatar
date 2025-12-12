@@ -181,7 +181,7 @@ export const SettingsPanel = ({
 
     return (
         <div className="absolute inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/50 backdrop-blur-sm">
-            <div className={`${theme === 'light' ? 'bg-white border-zinc-300' : 'bg-zinc-900 border-zinc-800'} border rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] ring-1 ${theme === 'light' ? 'ring-zinc-200' : 'ring-white/10'} overflow-hidden flex flex-col`}>
+            <div className={`${theme === 'light' ? 'bg-white border-zinc-300' : 'bg-zinc-900 border-zinc-800'} border rounded-2xl shadow-2xl max-w-2xl w-full h-[700px] ring-1 ${theme === 'light' ? 'ring-zinc-200' : 'ring-white/10'} overflow-hidden flex flex-col`}>
                 <div className={`sticky top-0 ${theme === 'light' ? 'bg-white/95' : 'bg-zinc-900/95'} backdrop-blur-md border-b ${theme === 'light' ? 'border-zinc-200' : 'border-zinc-800'} px-6 py-4 flex items-center justify-between z-10`}>
                     <div className="flex gap-6">
                         <button
@@ -213,27 +213,7 @@ export const SettingsPanel = ({
                     </button>
                 </div>
 
-                <div className="overflow-y-auto flex-1"
-                    style={{
-                        scrollbarWidth: 'thin',
-                        scrollbarColor: theme === 'light' ? '#d4d4d8 #f4f4f5' : '#52525b #27272a'
-                    }}
-                >
-                    <style jsx>{`
-div::-webkit-scrollbar, textarea::-webkit-scrollbar {
-    width: 8px;
-}
-div::-webkit-scrollbar-track, textarea::-webkit-scrollbar-track {
-    background: ${theme === 'light' ? '#f4f4f5' : '#27272a'};
-}
-div::-webkit-scrollbar-thumb, textarea::-webkit-scrollbar-thumb {
-    background: ${theme === 'light' ? '#d4d4d8' : '#52525b'};
-    border-radius: 4px;
-}
-div::-webkit-scrollbar-thumb:hover, textarea::-webkit-scrollbar-thumb:hover {
-    background: ${theme === 'light' ? '#a1a1aa' : '#71717a'};
-}
-`}</style>
+                <div className="overflow-y-auto flex-1 sleek-scrollbar">
 
                     <div className="p-6">
                         {activeTab === 'settings' && (
@@ -411,11 +391,7 @@ div::-webkit-scrollbar-thumb:hover, textarea::-webkit-scrollbar-thumb:hover {
                                                     value={openAIConfig.systemPrompt}
                                                     onChange={(e) => setOpenAIConfig({ ...openAIConfig, systemPrompt: e.target.value })}
                                                     rows={10}
-                                                    className={`w-full block px-4 py-2.5 bg-transparent border-0 focus:ring-0 outline-none transition-all font-mono text-xs leading-relaxed resize-y ${theme === 'light' ? 'text-zinc-800 placeholder-zinc-400' : 'text-zinc-300 placeholder-zinc-700'}`}
-                                                    style={{
-                                                        scrollbarWidth: 'thin',
-                                                        scrollbarColor: theme === 'light' ? '#d4d4d8 #f4f4f5' : '#52525b #27272a'
-                                                    }}
+                                                    className={`w-full block px-4 py-2.5 bg-transparent border-0 focus:ring-0 outline-none transition-all font-mono text-xs leading-relaxed resize-y sleek-scrollbar ${theme === 'light' ? 'text-zinc-800 placeholder-zinc-400' : 'text-zinc-300 placeholder-zinc-700'}`}
                                                     placeholder="You are a helpful assistant..."
                                                 />
                                             </div>
