@@ -134,6 +134,7 @@ export default function AvatarPage() {
     // Speech recognition
     const {
         isListening,
+        isStarting,
         error: sttError,
         startListening,
         stopListening
@@ -178,11 +179,11 @@ export default function AvatarPage() {
     const handleMicPress = useCallback(() => {
         if (avatarState !== 'connected' && avatarState !== 'speaking') return;
         touch();
-        if (!isListening && !isRecording) {
+        if (!isListening && !isRecording && !isStarting) {
             setIsRecording(true);
             startListening();
         }
-    }, [avatarState, touch, isListening, isRecording, startListening]);
+    }, [avatarState, touch, isListening, isRecording, isStarting, startListening]);
 
     const handleMicRelease = useCallback(() => {
         if (isListening && isRecording) {
@@ -278,17 +279,17 @@ export default function AvatarPage() {
 
                     <div className={`absolute bottom-8 left-0 right-0 z-50 flex flex-col items-center gap-4 transition-all duration-500 transform ${isConnected ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
                         <div className={`px-4 py-1.5 rounded-full backdrop-blur-md border ${sttError ? 'bg-red-500/10 border-red-500/30 text-red-500' :
-                            isListening ? (theme === 'light' ? 'bg-emerald-100 border-emerald-200 text-emerald-700' : 'bg-emerald-500/20 border-emerald-500/30 text-emerald-400') :
+                            (isListening || isStarting) ? (theme === 'light' ? 'bg-emerald-100 border-emerald-200 text-emerald-700' : 'bg-emerald-500/20 border-emerald-500/30 text-emerald-400') :
                                 (theme === 'light' ? 'bg-white/80 border-zinc-200 text-zinc-500' : 'bg-white/5 border-white/10 text-white/40')
                             }`}>
                             <span className="text-xs font-medium tracking-wide">
-                                {sttError ? 'Microphone Error' : isListening ? 'Listening...' : 'Hold Spacebar to Speak'}
+                                {sttError ? 'Microphone Error' : (isListening || isStarting) ? (isStarting ? 'Starting...' : 'Listening...') : 'Hold Spacebar to Speak'}
                             </span>
                         </div>
 
                         <div
                             ref={micRef}
-                            className={`relative w-16 h-16 rounded-full flex items-center justify-center cursor-pointer transition-all duration-300 ${isListening
+                            className={`relative w-16 h-16 rounded-full flex items-center justify-center cursor-pointer transition-all duration-300 ${(isListening || isStarting)
                                 ? 'bg-red-500 scale-110 shadow-[0_0_30px_rgba(239,68,68,0.4)]'
                                 : (theme === 'light'
                                     ? 'bg-white hover:bg-zinc-50 border border-zinc-200 shadow-lg text-zinc-800'
@@ -300,7 +301,7 @@ export default function AvatarPage() {
                             onTouchStart={(e) => { e.preventDefault(); handleMicPress(); }}
                             onTouchEnd={(e) => { e.preventDefault(); handleMicRelease(); }}
                         >
-                            {isListening && (
+                            {(isListening || isStarting) && (
                                 <div className="absolute inset-0 rounded-full border-2 border-red-500 opacity-50 animate-ping" />
                             )}
 

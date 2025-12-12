@@ -18,15 +18,31 @@ export function useSpeechRecognition({
   onRecognizing
 }: UseSpeechRecognitionProps) {
   const [isListening, setIsListening] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
   const [recognizedText, setRecognizedText] = useState('');
   const [interimText, setInterimText] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const recognizerRef = useRef<SpeechSDK.SpeechRecognizer | null>(null);
 
+  // Cleanup recognizer
+  const cleanupRecognizer = useCallback(() => {
+    if (recognizerRef.current) {
+      try {
+        recognizerRef.current.close();
+      } catch (err) {
+        console.error('Error closing recognizer:', err);
+      }
+      recognizerRef.current = null;
+    }
+  }, []);
+
   // Initialize recognizer
   const initializeRecognizer = useCallback(() => {
     try {
+      // Cleanup any existing recognizer first
+      cleanupRecognizer();
+
       // Create speech config
       let sdkSpeechConfig: SpeechSDK.SpeechConfig;
       if (speechConfig.enablePrivateEndpoint && speechConfig.privateEndpoint) {
@@ -52,8 +68,8 @@ export function useSpeechRecognition({
       if (sttConfig.profanityFilter) {
         sdkSpeechConfig.setProfanity(
           sttConfig.profanityFilter === 'masked' ? SpeechSDK.ProfanityOption.Masked :
-          sttConfig.profanityFilter === 'removed' ? SpeechSDK.ProfanityOption.Removed :
-          SpeechSDK.ProfanityOption.Raw
+            sttConfig.profanityFilter === 'removed' ? SpeechSDK.ProfanityOption.Removed :
+              SpeechSDK.ProfanityOption.Raw
         );
       }
 
@@ -111,7 +127,7 @@ export function useSpeechRecognition({
           // Log detected language for debugging
           const detectedLanguage = e.result.language || 'unknown';
           console.log('Speech recognized:', text, '| Detected language:', detectedLanguage);
-          
+
           if (text) {
             setRecognizedText(text);
             setInterimText('');
@@ -126,10 +142,12 @@ export function useSpeechRecognition({
                     () => {
                       console.log('Recognition stopped after utterance');
                       setIsListening(false);
+                      setIsStarting(false);
                     },
                     (err) => {
                       console.error('Error stopping recognition:', err);
                       setIsListening(false);
+                      setIsStarting(false);
                     }
                   );
                 }
@@ -143,28 +161,36 @@ export function useSpeechRecognition({
         console.error('Speech recognition canceled:', e.errorDetails);
         setError(e.errorDetails);
         setIsListening(false);
+        setIsStarting(false);
       };
 
       recognizer.sessionStopped = () => {
         console.log('[STT] Session stopped');
         setIsListening(false);
+        setIsStarting(false);
       };
 
     } catch (err) {
       console.error('Error initializing recognizer:', err);
       setError(err instanceof Error ? err.message : 'Failed to initialize recognizer');
+      setIsStarting(false);
     }
-  }, [speechConfig, sttConfig, onRecognized, onRecognizing]);
+  }, [speechConfig, sttConfig, onRecognized, onRecognizing, cleanupRecognizer]);
 
   // Start listening
   const startListening = useCallback(async () => {
     try {
       setError(null);
+      setIsStarting(true);
+      // Immediately clear buffers
+      setInterimText('');
+      setRecognizedText('');
 
       // Request microphone permission
       try {
         await navigator.mediaDevices.getUserMedia({ audio: true });
       } catch {
+        setIsStarting(false);
         throw new Error('Microphone permission denied');
       }
 
@@ -176,10 +202,13 @@ export function useSpeechRecognition({
       if (recognizerRef.current) {
         await recognizerRef.current.startContinuousRecognitionAsync();
         setIsListening(true);
+        setIsStarting(false);
       }
     } catch (err) {
       console.error('Error starting speech recognition:', err);
       setError(err instanceof Error ? err.message : 'Failed to start listening');
+      setIsStarting(false);
+      setIsListening(false);
     }
   }, [initializeRecognizer]);
 
@@ -189,6 +218,7 @@ export function useSpeechRecognition({
       try {
         await recognizerRef.current.stopContinuousRecognitionAsync();
         setIsListening(false);
+        setIsStarting(false);
         setInterimText('');
       } catch (err) {
         console.error('Error stopping speech recognition:', err);
@@ -196,22 +226,25 @@ export function useSpeechRecognition({
     }
   }, []);
 
-  // Cleanup on unmount and reset state
+  // Cleanup on unmount and page events
   useEffect(() => {
-    return () => {
-      if (recognizerRef.current) {
-        recognizerRef.current.close();
-        recognizerRef.current = null;
-      }
-      setIsListening(false);
-      setError(null);
-      setRecognizedText('');
-      setInterimText('');
+    const handleUnload = () => {
+      cleanupRecognizer();
     };
-  }, []);
+
+    window.addEventListener('beforeunload', handleUnload);
+    window.addEventListener('pagehide', handleUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleUnload);
+      window.removeEventListener('pagehide', handleUnload);
+      cleanupRecognizer();
+    };
+  }, [cleanupRecognizer]);
 
   return {
     isListening,
+    isStarting,
     recognizedText,
     interimText,
     error,
