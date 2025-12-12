@@ -19,12 +19,13 @@ export async function POST(req: NextRequest) {
 
   // Check if get_company_info tool was called by looking for ToolMessage
   let entityLicense: string | null = null;
+  let entityDetails: any = null;
+
   console.log('[API] Checking', result.messages.length, 'messages for entity');
   for (const msg of result.messages) {
     // Check if this is a tool message from get_company_info
     if (msg && typeof msg === 'object' && 'name' in msg && msg.name === 'get_company_info') {
       const toolOutput = String(msg?.content || '');
-      console.log('[API] Tool output:', toolOutput);
       // Extract license from tool output
       const match = toolOutput.match(/\[SHOW_ENTITY:([A-Z]+-[\w-]+)\]/i);
       if (match) {
@@ -34,10 +35,26 @@ export async function POST(req: NextRequest) {
       }
     }
   }
+
+  // If we have a license, look up the full entity details dynamically
+  if (entityLicense) {
+    try {
+      const fs = require('fs/promises');
+      const path = require('path');
+      const filePath = path.join(process.cwd(), 'src', 'knowledge', 'sca_entities.json');
+      const fileContent = await fs.readFile(filePath, 'utf-8');
+      const entities = JSON.parse(fileContent);
+      entityDetails = entities.find((e: any) => String(e.license || '').toUpperCase() === entityLicense!.toUpperCase());
+      console.log('[API] Found entity details:', entityDetails?.name);
+    } catch (err) {
+      console.error('[API] Failed to look up entity details:', err);
+    }
+  }
+
   console.log('[API] Final entityLicense:', entityLicense);
 
   return new Response(
-    JSON.stringify({ reply, entityLicense }),
+    JSON.stringify({ reply, entityLicense, entityDetails }),
     { headers: { 'Content-Type': 'application/json' } }
   );
 }

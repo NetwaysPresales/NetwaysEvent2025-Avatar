@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Outfit } from "next/font/google";
 import "./globals.css";
+import { SettingsProvider } from '@/context/SettingsContext';
 
 const outfit = Outfit({
   variable: "--font-outfit",
@@ -9,8 +10,8 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "SCA AI Assistant",
-  description: "AI-powered voice assistant for SCA regulatory information",
+  title: "Netways Avatar",
+  description: "AI-powered voice assistant",
 };
 
 export default function RootLayout({
@@ -23,7 +24,9 @@ export default function RootLayout({
       <body
         className={`${outfit.variable} font-sans antialiased`}
       >
-        {children}
+        <SettingsProvider>
+          {children}
+        </SettingsProvider>
       </body>
     </html>
   );

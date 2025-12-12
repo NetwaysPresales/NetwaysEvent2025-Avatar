@@ -52,6 +52,19 @@ export function useAvatarSession({
   // Start avatar session
   const startSession = useCallback(async () => {
     try {
+      // Ensure previous session is fully cleaned up
+      if (avatarSynthesizerRef.current || peerConnectionRef.current) {
+        console.log('[Avatar] Cleaning up previous session before starting new one...');
+        if (avatarSynthesizerRef.current) {
+          avatarSynthesizerRef.current.close();
+          avatarSynthesizerRef.current = null;
+        }
+        if (peerConnectionRef.current) {
+          peerConnectionRef.current.close();
+          peerConnectionRef.current = null;
+        }
+      }
+
       updateState('connecting');
       setError(null);
 
@@ -94,7 +107,7 @@ export function useAvatarSession({
             const eventData: AvatarEventData = JSON.parse(e.data);
             onEvent?.(eventData);
             console.log('Avatar event:', eventData);
-            
+
             // Auto-reconnect on SESSION_END (Azure sample pattern)
             if (eventData.event.eventType === 'EVENT_TYPE_SESSION_END') {
               console.log('[Avatar] SESSION_END received');
@@ -105,12 +118,12 @@ export function useAvatarSession({
                 if (idleMs < maxIdleMs) {
                   console.log('[Avatar] Auto-reconnecting (last interaction:', Math.floor(idleMs / 1000), 's ago)');
                   isReconnectingRef.current = true;
-                  
+
                   // Trigger event to show meg.png before reconnection
                   if (onEvent) {
                     onEvent({ event: { eventType: 'EVENT_TYPE_RECONNECTING' } });
                   }
-                  
+
                   // Remove old message handler to avoid duplicate reconnects
                   dataChannel.onmessage = null;
                   // Close old connection
@@ -181,10 +194,10 @@ export function useAvatarSession({
 
       // Create avatar video format
       const videoFormat = new SpeechSDK.AvatarVideoFormat();
-      
+
       // Note: Bitrate is controlled by Azure backend and cannot be set via SDK
       // Video quality is determined by the service based on available bandwidth
-      
+
       if (avatarConfig.videoCrop) {
         videoFormat.setCropRange(
           new SpeechSDK.Coordinate(600, 0),
@@ -221,16 +234,16 @@ export function useAvatarSession({
 
       // Start avatar
       const result = await avatarSynthesizer.startAvatarAsync(peerConnection);
-      
+
       if (result.reason === SpeechSDK.ResultReason.SynthesizingAudioCompleted) {
         console.log('[Avatar] Started successfully. Result ID:', result.resultId);
         lastInteractionRef.current = new Date();
         isReconnectingRef.current = false;
-        
+
         // Ensure state is properly set to connected
         updateState('connected');
         console.log('[Avatar] State set to connected');
-        
+
         // Mark session active after 5s to allow WebRTC to stabilize (like Azure sample)
         setTimeout(() => {
           sessionActiveRef.current = true;
@@ -239,7 +252,11 @@ export function useAvatarSession({
           updateState('connected');
         }, 5000);
       } else {
-        throw new Error('Failed to start avatar');
+        console.error('[Avatar] Start failed with reason:', result.reason, 'Error details:', result.errorDetails);
+        if (result.reason === SpeechSDK.ResultReason.Canceled) {
+          throw new Error(`Failed to start avatar: Canceled. ${result.errorDetails || 'No details provided'}`);
+        }
+        throw new Error(`Failed to start avatar: ${result.reason}`);
       }
 
     } catch (err) {
@@ -290,7 +307,7 @@ export function useAvatarSession({
 
       const ssml = createSSML(text, ttsConfig.voice, endingSilenceMs, ttsConfig);
       lastInteractionRef.current = new Date();
-      
+
       const result = await avatarSynthesizerRef.current.speakSsmlAsync(ssml);
 
       if (result.reason === SpeechSDK.ResultReason.SynthesizingAudioCompleted) {
@@ -341,7 +358,7 @@ export function useAvatarSession({
     error,
     startSession,
     stopSession,
-    touch: () => { 
+    touch: () => {
       lastInteractionRef.current = new Date();
     },
     speak,

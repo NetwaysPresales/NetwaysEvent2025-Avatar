@@ -1,23 +1,37 @@
 import { tool } from '@langchain/core/tools';
-import entities from '@/data/sca_entities.json';
+import fs from 'fs/promises';
+import path from 'path';
+
+// Define path to knowledge base
+const KNOWLEDGE_FILE = path.join(process.cwd(), 'src', 'knowledge', 'sca_entities.json');
 
 export function localRetrieverTool() {
   return tool(
     async (input: string) => {
       let key = input.trim().toLowerCase();
       console.log('[Tool] Searching for company:', key);
-      
+
+      // Load entities dynamically
+      let entities: any[] = [];
+      try {
+        const fileContent = await fs.readFile(KNOWLEDGE_FILE, 'utf-8');
+        entities = JSON.parse(fileContent);
+      } catch (err) {
+        console.error('[Tool] Failed to load entities:', err);
+        return 'Error loading company data.';
+      }
+
       // Handle common variations for "4T Global Markets"
       if (key.includes('40 global') || key.includes('forty global') || key.includes('fourty global')) {
         key = '4t global markets';
         console.log('[Tool] Normalized to:', key);
       }
-      
+
       // Find entity by matching name (prioritize exact matches first)
       let found = entities.find((e) => {
         const name = e.name.toLowerCase().replace(/\s*pjsc\s*/g, '').replace(/\s*llc\s*/g, '').replace(/\s*financial services\s*/g, '').trim();
         const cleanKey = key.replace(/\s*pjsc\s*/g, '').replace(/\s*llc\s*/g, '').replace(/\s*financial services\s*/g, '').trim();
-        
+
         // Exact match (highest priority)
         if (name === cleanKey || name.replace(/\s+/g, ' ') === cleanKey) {
           console.log('[Tool] Exact match found:', e.name);
@@ -25,7 +39,7 @@ export function localRetrieverTool() {
         }
         return false;
       });
-      
+
       // If no exact match, try partial matching
       if (!found) {
         found = entities.find((e) => {
