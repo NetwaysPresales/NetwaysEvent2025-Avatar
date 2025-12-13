@@ -1,0 +1,37 @@
+{
+    "id": "investment-advisor",
+    "name": "Investment Advisor",
+    "created": 1702410000000,
+    "updated": 1702410000000,
+    "avatarConfig": {
+        "character": "Harry",
+        "style": "business",
+        "customized": false,
+        "useBuiltInVoice": false,
+        "backgroundColor": "#FFFFFFFF",
+        "backgroundImageUrl": "",
+        "transparentBackground": false,
+        "videoCrop": false
+    },
+    "speechConfig": {
+        "region": "westeurope",
+        "apiKey": "",
+        "privateEndpoint": "",
+        "enablePrivateEndpoint": false
+    },
+    "ttsConfig": {
+        "voice": "en-US-AndrewMultilingualNeural",
+        "customVoiceEndpointId": ""
+    },
+    "openAIConfig": {
+        "endpoint": "",
+        "apiKey": "",
+        "deploymentName": "gpt-4o-mini",
+        "systemPrompt": "You are a senior investment advisor for Netways Finance. You provide professional, data-driven advice about market trends, portfolio diversification, and risk management. Always maintain a professional, reassuring tone. Use the knowledge base to answer specific questions about our investment products."
+    },
+    "logo": null,
+    "background": "bg1.jpg",
+    "appTitle": "Netways Wealth",
+    "appDescription": "Smart Investment Guidance",
+    "theme": "dark"
+}

@@ -1,0 +1,37 @@
+{
+    "id": "event-support",
+    "name": "Event Support",
+    "created": 1702410001000,
+    "updated": 1702410001000,
+    "avatarConfig": {
+        "character": "Meg",
+        "style": "casual",
+        "customized": false,
+        "useBuiltInVoice": false,
+        "backgroundColor": "#FFFFFFFF",
+        "backgroundImageUrl": "",
+        "transparentBackground": false,
+        "videoCrop": false
+    },
+    "speechConfig": {
+        "region": "westeurope",
+        "apiKey": "",
+        "privateEndpoint": "",
+        "enablePrivateEndpoint": false
+    },
+    "ttsConfig": {
+        "voice": "en-US-AvaMultilingualNeural",
+        "customVoiceEndpointId": ""
+    },
+    "openAIConfig": {
+        "endpoint": "",
+        "apiKey": "",
+        "deploymentName": "gpt-4o-mini",
+        "systemPrompt": "You are the official concierge for the Netways 2025 Tech Summit. Your job is to help attendees with schedules, venue information, and networking opportunities. Be energetic, helpful, and polite. If you don't know an answer, ask the user to check the registration desk."
+    },
+    "logo": null,
+    "background": "bg2.mp4",
+    "appTitle": "Summit Concierge",
+    "appDescription": "2025 Tech Event Assistant",
+    "theme": "light"
+}

@@ -1,37 +1,21 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import Image from 'next/image';
 
 type Props = {
     theme?: 'dark' | 'light';
-    refreshTrigger?: number; // Optional prop to force consistency if needed
+    src?: string | null;
 };
 
-export const AvatarBackground = ({ theme = 'dark', refreshTrigger }: Props) => {
-    const [url, setUrl] = useState<string | null>(null);
+export const AvatarBackground = ({ theme = 'dark', src }: Props) => {
     const videoRef = useRef<HTMLVideoElement>(null);
-
-    const fetchBackground = async () => {
-        try {
-            const res = await fetch('/api/avatar/background?t=' + Date.now()); // Cache bust
-            const data = await res.json();
-            setUrl(data.url);
-        } catch (error) {
-            console.error('Failed to fetch background:', error);
-            setUrl(null);
-        }
-    };
-
-    useEffect(() => {
-        fetchBackground();
-    }, [refreshTrigger]);
 
     useEffect(() => {
         if (videoRef.current) {
             videoRef.current.playbackRate = 0.75;
         }
-    }, [url]);
+    }, [src]);
 
-    if (!url) {
+    if (!src) {
         // Fallback to solid/gradient based on theme
         return (
             <div className={`absolute inset-0 pointer-events-none ${theme === 'light' ? 'bg-zinc-50' : 'bg-black'}`}>
@@ -48,7 +32,7 @@ export const AvatarBackground = ({ theme = 'dark', refreshTrigger }: Props) => {
         );
     }
 
-    const isVideo = url.match(/\.(mp4|webm)$/i);
+    const isVideo = src.match(/\.(mp4|webm)$/i);
 
     return (
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
@@ -60,11 +44,11 @@ export const AvatarBackground = ({ theme = 'dark', refreshTrigger }: Props) => {
                     muted
                     playsInline
                     className="absolute inset-0 w-full h-full object-cover"
-                    src={url}
+                    src={src}
                 />
             ) : (
                 <Image
-                    src={url}
+                    src={src}
                     alt="Avatar Background"
                     fill
                     className="object-cover"

@@ -1,8 +1,9 @@
 
 import React, { Dispatch, SetStateAction, useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import Image from 'next/image';
 import { AvatarBackground } from '@/components/AvatarBackground';
-import type { AvatarConfig, SpeechConfig, AzureOpenAIConfig } from '@/types/avatar';
+import type { AvatarConfig, SpeechConfig, AzureOpenAIConfig, TTSConfig } from '@/types/avatar';
 
 type Props = {
     theme: 'dark' | 'light';
@@ -20,6 +21,9 @@ type Props = {
     openAIConfig: AzureOpenAIConfig;
     setOpenAIConfig: Dispatch<SetStateAction<AzureOpenAIConfig>>;
 
+    ttsConfig: TTSConfig;
+    setTTSConfig: Dispatch<SetStateAction<TTSConfig>>;
+
     // App Settings
     appTitle: string;
     setAppTitle: Dispatch<SetStateAction<string>>;
@@ -27,15 +31,26 @@ type Props = {
     setAppDescription: Dispatch<SetStateAction<string>>;
     logoUrl: string;
     setLogoUrl: Dispatch<SetStateAction<string>>;
+
+    // Background Settings
     bgRefreshTrigger: number;
     refreshBackground: () => void;
+    backgroundUrl: string | null;
+    setBackgroundUrl: Dispatch<SetStateAction<string | null>>;
 
     // Visibility States
     showSpeechApiKey: boolean;
     setShowSpeechApiKey: Dispatch<SetStateAction<boolean>>;
     showOpenAIApiKey: boolean;
     setShowOpenAIApiKey: Dispatch<SetStateAction<boolean>>;
+
+    // We need currentProfileId for uploads
+    currentProfileId: string | undefined;
+    onSavePromise: () => Promise<void>;
+
 };
+
+
 
 export const SettingsPanel = ({
     theme,
@@ -48,6 +63,8 @@ export const SettingsPanel = ({
     setSpeechConfig,
     openAIConfig,
     setOpenAIConfig,
+    ttsConfig,
+    setTTSConfig,
     appTitle,
     setAppTitle,
     appDescription,
@@ -56,10 +73,14 @@ export const SettingsPanel = ({
     setLogoUrl,
     bgRefreshTrigger,
     refreshBackground,
+    backgroundUrl,
+    setBackgroundUrl,
     showSpeechApiKey,
     setShowSpeechApiKey,
     showOpenAIApiKey,
-    setShowOpenAIApiKey
+    setShowOpenAIApiKey,
+    currentProfileId,
+    onSavePromise
 }: Props) => {
     // Tab state
     const [activeTab, setActiveTab] = useState<'settings' | 'appearance' | 'knowledge'>('settings');
@@ -69,26 +90,17 @@ export const SettingsPanel = ({
     const [knowledgeFiles, setKnowledgeFiles] = useState<string[]>([]);
     const [isUploading, setIsUploading] = useState(false);
     const [uploadError, setUploadError] = useState<string | null>(null);
-    const [bgFilename, setBgFilename] = useState<string | null>(null);
-
-    // Fetch background info
-    useEffect(() => {
-        const fetchBg = async () => {
-            try {
-                const res = await fetch('/api/avatar/background?t=' + Date.now());
-                const data = await res.json();
-                if (data.url) {
-                    const name = data.url.split('/').pop();
-                    setBgFilename(name || 'Custom Background');
-                } else {
-                    setBgFilename(null);
-                }
-            } catch {
-                setBgFilename(null);
-            }
-        };
-        fetchBg();
-    }, [bgRefreshTrigger]);
+    // Helper to extract filename for display
+    const getBgFilename = () => {
+        if (!backgroundUrl) return null;
+        try {
+            const url = new URL(backgroundUrl, 'http://localhost');
+            return url.searchParams.get('file');
+        } catch {
+            return 'Custom Background';
+        }
+    };
+    const bgFilename = getBgFilename();
 
     // Fetch knowledge files on open or tab switch
     useEffect(() => {
@@ -99,7 +111,8 @@ export const SettingsPanel = ({
 
     const fetchKnowledgeFiles = async () => {
         try {
-            const res = await fetch('/api/knowledge');
+            if (!currentProfileId) return;
+            const res = await fetch(`/api/profiles/${currentProfileId}/knowledge`);
             const data = await res.json();
             if (data.files) {
                 setKnowledgeFiles(data.files);
@@ -113,6 +126,8 @@ export const SettingsPanel = ({
         const file = e.target.files?.[0];
         if (!file) return;
 
+        if (!currentProfileId) return;
+
         setIsUploading(true);
         setUploadError(null);
 
@@ -120,7 +135,7 @@ export const SettingsPanel = ({
         formData.append('file', file);
 
         try {
-            const res = await fetch('/api/knowledge', {
+            const res = await fetch(`/api/profiles/${currentProfileId}/knowledge`, {
                 method: 'POST',
                 body: formData
             });
@@ -141,14 +156,13 @@ export const SettingsPanel = ({
         const file = e.target.files?.[0];
         if (!file) return;
 
-        // setIsUploading(true); // Reuse uploading state logic or add new one? 
-        // Let's keep it simple and just upload. Maybe add a toast or simple alert in next iteration if needed.
+        if (!currentProfileId) return;
 
         const formData = new FormData();
         formData.append('file', file);
 
         try {
-            const res = await fetch('/api/upload/avatar-bg', {
+            const res = await fetch(`/api/profiles/${currentProfileId}/assets`, {
                 method: 'POST',
                 body: formData
             });
@@ -157,7 +171,9 @@ export const SettingsPanel = ({
 
             const data = await res.json();
             if (data.url) {
-                refreshBackground();
+                // Update local state directly with the new URL
+                setBackgroundUrl(data.url);
+                refreshBackground(); // Legacy trigger just in case
             }
         } catch (err) {
             console.error('Failed to upload background', err);
@@ -165,10 +181,11 @@ export const SettingsPanel = ({
     };
 
     const handleDeleteFile = async (filename: string) => {
+        if (!currentProfileId) return;
         if (!confirm(`Delete ${filename}?`)) return;
 
         try {
-            await fetch('/api/knowledge?filename=' + encodeURIComponent(filename), {
+            await fetch(`/api/profiles/${currentProfileId}/knowledge?filename=` + encodeURIComponent(filename), {
                 method: 'DELETE'
             });
             await fetchKnowledgeFiles();
@@ -186,21 +203,42 @@ export const SettingsPanel = ({
                     <div className="flex gap-6">
                         <button
                             onClick={() => setActiveTab('settings')}
-                            className={`text-xl font-light tracking-wide transition-colors ${activeTab === 'settings' ? (theme === 'light' ? 'text-zinc-900' : 'text-zinc-100') : (theme === 'light' ? 'text-zinc-400 hover:text-zinc-600' : 'text-zinc-500 hover:text-zinc-300')}`}
+                            className={`relative text-xl font-light tracking-wide transition-colors ${activeTab === 'settings' ? (theme === 'light' ? 'text-zinc-900' : 'text-zinc-100') : (theme === 'light' ? 'text-zinc-400 hover:text-zinc-600' : 'text-zinc-500 hover:text-zinc-300')}`}
                         >
                             Settings
+                            {activeTab === 'settings' && (
+                                <motion.div
+                                    layoutId="activeTab"
+                                    className="absolute -bottom-1 left-0 right-0 h-0.5 bg-emerald-500"
+                                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                                />
+                            )}
                         </button>
                         <button
                             onClick={() => setActiveTab('appearance')}
-                            className={`text-xl font-light tracking-wide transition-colors ${activeTab === 'appearance' ? (theme === 'light' ? 'text-zinc-900' : 'text-zinc-100') : (theme === 'light' ? 'text-zinc-400 hover:text-zinc-600' : 'text-zinc-500 hover:text-zinc-300')}`}
+                            className={`relative text-xl font-light tracking-wide transition-colors ${activeTab === 'appearance' ? (theme === 'light' ? 'text-zinc-900' : 'text-zinc-100') : (theme === 'light' ? 'text-zinc-400 hover:text-zinc-600' : 'text-zinc-500 hover:text-zinc-300')}`}
                         >
                             Appearance
+                            {activeTab === 'appearance' && (
+                                <motion.div
+                                    layoutId="activeTab"
+                                    className="absolute -bottom-1 left-0 right-0 h-0.5 bg-emerald-500"
+                                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                                />
+                            )}
                         </button>
                         <button
                             onClick={() => setActiveTab('knowledge')}
-                            className={`text-xl font-light tracking-wide transition-colors ${activeTab === 'knowledge' ? (theme === 'light' ? 'text-zinc-900' : 'text-zinc-100') : (theme === 'light' ? 'text-zinc-400 hover:text-zinc-600' : 'text-zinc-500 hover:text-zinc-300')}`}
+                            className={`relative text-xl font-light tracking-wide transition-colors ${activeTab === 'knowledge' ? (theme === 'light' ? 'text-zinc-900' : 'text-zinc-100') : (theme === 'light' ? 'text-zinc-400 hover:text-zinc-600' : 'text-zinc-500 hover:text-zinc-300')}`}
                         >
                             Knowledge Base
+                            {activeTab === 'knowledge' && (
+                                <motion.div
+                                    layoutId="activeTab"
+                                    className="absolute -bottom-1 left-0 right-0 h-0.5 bg-emerald-500"
+                                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                                />
+                            )}
                         </button>
                     </div>
 
@@ -330,6 +368,27 @@ export const SettingsPanel = ({
                                     </div>
                                 </div>
 
+                                {/* Text to Speech */}
+                                <div>
+                                    <h3 className="text-sm font-medium text-emerald-500 uppercase tracking-wider mb-4">Text to Speech</h3>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className={`block text-xs font-light ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-400'} mb-1.5 uppercase tracking-wide`}>Voice Name</label>
+                                            <input
+                                                type="text"
+                                                value={ttsConfig.voice}
+                                                onChange={(e) => setTTSConfig({ ...ttsConfig, voice: e.target.value })}
+                                                disabled={isConnected}
+                                                placeholder="en-US-AvaMultilingualNeural"
+                                                className={`w-full px-4 py-2.5 ${theme === 'light' ? 'bg-zinc-50 border-zinc-300 text-zinc-900' : 'bg-zinc-950 border-zinc-800 text-zinc-200'} border rounded-lg focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed ${theme === 'light' ? 'placeholder-zinc-400' : 'placeholder-zinc-700'} font-light`}
+                                            />
+                                            <p className={`text-[10px] mt-1 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-500'}`}>
+                                                e.g. en-US-AvaMultilingualNeural, en-US-AndrewMultilingualNeural
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 {/* Azure OpenAI */}
                                 <div>
                                     <h3 className="text-sm font-medium text-emerald-500 uppercase tracking-wider mb-4">Azure OpenAI</h3>
@@ -414,7 +473,6 @@ export const SettingsPanel = ({
                                                     alt="Icon Preview"
                                                     fill
                                                     className="object-contain p-2"
-                                                    onError={() => setLogoUrl('/logo.png')}
                                                 />
                                             </div>
                                             <div
@@ -446,16 +504,29 @@ export const SettingsPanel = ({
                                                         <input
                                                             type="file"
                                                             accept="image/*"
-                                                            onChange={(e) => {
+                                                            onChange={async (e) => {
                                                                 const file = e.target.files?.[0];
-                                                                if (file) {
-                                                                    const reader = new FileReader();
-                                                                    reader.onload = (e) => {
-                                                                        if (e.target?.result) {
-                                                                            setLogoUrl(e.target.result as string);
+                                                                if (file && currentProfileId) {
+                                                                    try {
+                                                                        const formData = new FormData();
+                                                                        formData.append('file', file);
+                                                                        const res = await fetch(`/api/profiles/${currentProfileId}/assets`, {
+                                                                            method: 'POST',
+                                                                            body: formData
+                                                                        });
+                                                                        if (res.ok) {
+                                                                            const data = await res.json();
+                                                                            // data.url is likely the full API url or relative. 
+                                                                            // The backend allows us to construct it: /api/profiles/[id]/assets?file=[filename]
+                                                                            // But looking at background upload, it might return { url: ... }
+                                                                            // Let's assume it returns { url: ... } based on background logic.
+                                                                            if (data.url) {
+                                                                                setLogoUrl(data.url);
+                                                                            }
                                                                         }
-                                                                    };
-                                                                    reader.readAsDataURL(file);
+                                                                    } catch (err) {
+                                                                        console.error("Failed to upload logo", err);
+                                                                    }
                                                                 }
                                                             }}
                                                             className="hidden"
@@ -465,10 +536,21 @@ export const SettingsPanel = ({
                                                         Upload or click area to paste
                                                     </span>
                                                 </div>
+
+                                                {/* Logo Paste Logic Refactored inline */}
+                                                {/* Note: The setLogoUrl in parent component should ideally be using the new API upload too.
+                                                    But 'setLogoUrl' passed here is likely just state setter.
+                                                    We need to intercept the image and upload it to profiles/.../assets
+                                                    then set the logoUrl to the new asset path.
+                                                    
+                                                    But to keep changes minimal, we assume setLogoUrl handles the string.
+                                                    Real implementation of uploading logo:
+                                                */}
                                             </div>
                                         </div>
                                     </div>
                                 </div>
+
 
                                 {/* Avatar Background */}
                                 <div>
@@ -476,7 +558,7 @@ export const SettingsPanel = ({
                                     <div className={`p-4 rounded-xl border ${theme === 'light' ? 'bg-white border-zinc-200' : 'bg-zinc-900/50 border-zinc-800'}`}>
                                         <div className="flex items-start gap-4">
                                             <div className={`relative w-40 h-24 ${theme === 'light' ? 'bg-zinc-100 border-zinc-300' : 'bg-zinc-900 border-zinc-800'} rounded-lg border overflow-hidden shrink-0`}>
-                                                <AvatarBackground theme={theme} refreshTrigger={bgRefreshTrigger} />
+                                                <AvatarBackground theme={theme} src={backgroundUrl} />
                                             </div>
                                             <div
                                                 className="flex-1 outline-none"
@@ -491,16 +573,15 @@ export const SettingsPanel = ({
                                                         const item = items[i];
                                                         if (item.type.indexOf('image') !== -1 || item.type.indexOf('video') !== -1) {
                                                             const file = item.getAsFile();
-                                                            if (file) {
-                                                                // Manual upload trigger
+                                                            if (file && currentProfileId) {
                                                                 const formData = new FormData();
                                                                 formData.append('file', file);
-                                                                fetch('/api/upload/avatar-bg', {
+                                                                fetch(`/api/profiles/${currentProfileId}/assets`, {
                                                                     method: 'POST',
                                                                     body: formData
                                                                 }).then(async res => {
                                                                     const data = await res.json();
-                                                                    if (data.url) refreshBackground();
+                                                                    if (data.url) setBackgroundUrl(data.url);
                                                                 });
                                                             }
                                                             break;
@@ -531,12 +612,7 @@ export const SettingsPanel = ({
                                                         <button
                                                             onClick={async () => {
                                                                 if (!confirm('Remove custom background?')) return;
-                                                                try {
-                                                                    await fetch('/api/avatar/background', { method: 'DELETE' });
-                                                                    refreshBackground();
-                                                                } catch (err) {
-                                                                    console.error('Failed to remove background', err);
-                                                                }
+                                                                setBackgroundUrl(null);
                                                             }}
                                                             className="text-xs text-red-500 hover:text-red-600 font-medium px-2 py-1 rounded hover:bg-red-50 transition-colors"
                                                         >
@@ -616,14 +692,17 @@ export const SettingsPanel = ({
 
                 <div className={`p-6 border-t ${theme === 'light' ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-900/50 border-zinc-800'}`}>
                     <button
-                        onClick={onClose}
+                        onClick={async () => {
+                            await onSavePromise();
+                            onClose();
+                        }}
                         className="w-full py-3 px-4 bg-emerald-500 hover:bg-emerald-600 text-white font-medium rounded-lg transition-colors shadow-lg shadow-emerald-500/20"
                     >
                         Save Settings
                     </button>
                 </div>
             </div>
-        </div>
+        </div >
 
     );
 };

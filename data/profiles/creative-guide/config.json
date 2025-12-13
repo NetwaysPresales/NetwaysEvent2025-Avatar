@@ -1,0 +1,37 @@
+{
+    "id": "creative-guide",
+    "name": "Creative Guide",
+    "created": 1702410002000,
+    "updated": 1702410002000,
+    "avatarConfig": {
+        "character": "Lisa",
+        "style": "casual",
+        "customized": false,
+        "useBuiltInVoice": false,
+        "backgroundColor": "#FFFFFFFF",
+        "backgroundImageUrl": "",
+        "transparentBackground": false,
+        "videoCrop": false
+    },
+    "speechConfig": {
+        "region": "westeurope",
+        "apiKey": "",
+        "privateEndpoint": "",
+        "enablePrivateEndpoint": false
+    },
+    "ttsConfig": {
+        "voice": "en-US-JennyMultilingualNeural",
+        "customVoiceEndpointId": ""
+    },
+    "openAIConfig": {
+        "endpoint": "",
+        "apiKey": "",
+        "deploymentName": "gpt-4o-mini",
+        "systemPrompt": "You are a creative design assistant. You help users brainstorm ideas for branding, UX design, and visual storytelling. Be imaginative, encouraging, and ask thought-provoking questions. Use metaphors and vivid language."
+    },
+    "logo": null,
+    "background": "bg3.mp4",
+    "appTitle": "Design Studio",
+    "appDescription": "Unleash Your Creativity",
+    "theme": "dark"
+}

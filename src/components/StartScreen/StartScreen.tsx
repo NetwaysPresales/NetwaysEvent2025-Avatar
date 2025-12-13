@@ -38,15 +38,21 @@ export const StartScreen = ({
                         transition={{ delay: 0.2 }}
                         className="w-48 h-48 mx-auto flex items-center justify-center mb-6"
                     >
-                        <Image
-                            src={logoUrl || "/logo.png"}
-                            alt="Logo"
-                            width={180}
-                            height={180}
-                            className="object-contain drop-shadow-xl"
-                            priority
-                            style={{ width: 'auto', height: 'auto' }}
-                        />
+                        {logoUrl ? (
+                            <Image
+                                src={logoUrl}
+                                alt="Logo"
+                                width={180}
+                                height={180}
+                                className="object-contain drop-shadow-xl"
+                                priority
+                                style={{ width: 'auto', height: 'auto' }}
+                            />
+                        ) : (
+                            <div className="w-full h-full flex items-center justify-center text-4xl font-bold opacity-10">
+                                {appTitle.charAt(0).toUpperCase()}
+                            </div>
+                        )}
                     </motion.div>
 
                     <h1 className={`text-4xl md:text-5xl font-light tracking-tight ${theme === 'light' ? 'text-zinc-900' : 'text-white'} whitespace-nowrap`}>

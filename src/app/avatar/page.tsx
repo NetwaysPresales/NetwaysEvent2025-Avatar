@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import Image from 'next/image';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
@@ -24,6 +25,7 @@ const COMPANY_INFO_HIDE_DELAY_MS = 2000;
 const cleanTextForTTS = (text: string) => {
     return text
         .replace(/[#*`_\[\]()-]/g, '') // Remove common markdown symbols
+        .replace(/[\p{Emoji}\p{Extended_Pictographic}]/gu, '') // Remove emojis which sound bad in TTS
         .replace(/\s+/g, ' ')           // Collapse multiple spaces
         .trim();
 };
@@ -32,7 +34,7 @@ export default function AvatarPage() {
     const router = useRouter();
     const {
         speechConfig, avatarConfig, ttsConfig, openAIConfig, sttConfig,
-        theme, bgRefreshTrigger
+        theme, backgroundUrl, appTitle, logoUrl
     } = useSettings();
 
     // Auto-scroll ref
@@ -350,7 +352,7 @@ export default function AvatarPage() {
         <main className={`relative w-full h-screen overflow-hidden ${theme === 'light' ? 'bg-zinc-50' : 'bg-black'}`}>
 
 
-            <AvatarBackground theme={theme} refreshTrigger={bgRefreshTrigger} />
+            <AvatarBackground theme={theme} src={backgroundUrl} />
             <LoadingOverlay theme={theme} isVisible={isConnecting && !isAvatarReady} message="Connecting to Avatar..." />
 
             {/* Audio Blocked Toast */}
@@ -368,6 +370,27 @@ export default function AvatarPage() {
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            {/* App Title (Top Right) */}
+            <div className={`absolute top-6 right-6 z-50 pointer-events-none transition-opacity duration-1000 ${isAvatarReady ? 'opacity-100' : 'opacity-0'}`}>
+                <div className={`${backgroundUrl ? `px-6 py-2 rounded-full backdrop-blur-md shadow-lg border ${theme === 'light' ? 'bg-white/90 border-white/50' : 'bg-black/60 border-white/10'}` : ''}`}>
+                    <div className="flex items-center gap-3">
+                        {logoUrl && (
+                            <div className="relative w-8 h-8">
+                                <Image
+                                    src={logoUrl}
+                                    alt="Logo"
+                                    fill
+                                    className="object-contain"
+                                />
+                            </div>
+                        )}
+                        <h1 className={`text-xl font-light tracking-wide ${theme === 'light' ? 'text-zinc-800' : 'text-zinc-100'} ${!backgroundUrl && 'drop-shadow-md'}`}>
+                            {appTitle}
+                        </h1>
+                    </div>
+                </div>
+            </div>
 
             {/* Back Button */}
             <div className="absolute top-6 left-6 z-50">
