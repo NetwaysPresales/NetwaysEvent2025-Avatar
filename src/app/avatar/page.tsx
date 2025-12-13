@@ -62,25 +62,7 @@ export default function AvatarPage() {
         }
     }, []);
 
-    // Initialization Timeout for Reset Option
-    const [showResetOption, setShowResetOption] = useState(false);
-    useEffect(() => {
-        if (!avatarSessionStarted) {
-            const timer = setTimeout(() => setShowResetOption(true), 3000);
-            return () => clearTimeout(timer);
-        }
-    }, [avatarSessionStarted]);
 
-    const handleResetConfig = () => {
-        // Clear local storage keys to force re-render with env defaults
-        try {
-            window.localStorage.removeItem('speechConfig_v2');
-            window.localStorage.removeItem('openAIConfig_v2');
-            window.location.reload();
-        } catch (e) {
-            console.error('Failed to reset config:', e);
-        }
-    };
 
     const micRef = useRef<HTMLDivElement>(null);
 
@@ -217,8 +199,7 @@ export default function AvatarPage() {
                 speak(cleanTextForTTS(reply));
             }
         },
-        onRecognizing: () => {
-        }
+
     });
 
     const handleStartSession = useCallback(async () => {
@@ -374,9 +355,9 @@ export default function AvatarPage() {
             {/* App Title (Top Right) */}
             <div className={`absolute top-6 right-6 z-50 pointer-events-none transition-opacity duration-1000 ${isAvatarReady ? 'opacity-100' : 'opacity-0'}`}>
                 <div className={`${backgroundUrl ? `px-6 py-2 rounded-full backdrop-blur-md shadow-lg border ${theme === 'light' ? 'bg-white/90 border-white/50' : 'bg-black/60 border-white/10'}` : ''}`}>
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-col items-center gap-1">
                         {logoUrl && (
-                            <div className="relative w-8 h-8">
+                            <div className="relative w-32 h-12">
                                 <Image
                                     src={logoUrl}
                                     alt="Logo"
@@ -385,7 +366,7 @@ export default function AvatarPage() {
                                 />
                             </div>
                         )}
-                        <h1 className={`text-xl font-light tracking-wide ${theme === 'light' ? 'text-zinc-800' : 'text-zinc-100'} ${!backgroundUrl && 'drop-shadow-md'}`}>
+                        <h1 className={`text-lg font-light tracking-wide ${theme === 'light' ? 'text-zinc-800' : 'text-zinc-100'} ${!backgroundUrl && 'drop-shadow-md'}`}>
                             {appTitle}
                         </h1>
                     </div>

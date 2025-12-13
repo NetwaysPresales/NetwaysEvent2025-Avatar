@@ -210,7 +210,6 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
 
         const updated: AvatarProfile = {
             ...currentProfile,
-            ...currentProfile,
             avatarConfig,
             speechConfig,
             ttsConfig,
