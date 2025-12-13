@@ -55,7 +55,7 @@ export default function LandingPage() {
   // Initial load
   useEffect(() => {
     refreshProfiles();
-  }, []);
+  }, [refreshProfiles]);
 
   const handleStart = () => {
     setIsStarting(true);

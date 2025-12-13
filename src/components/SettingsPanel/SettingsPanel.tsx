@@ -1,5 +1,5 @@
 
-import React, { Dispatch, SetStateAction, useState, useEffect } from 'react';
+import React, { Dispatch, SetStateAction, useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import Image from 'next/image';
 import { AvatarBackground } from '@/components/AvatarBackground';
@@ -71,7 +71,7 @@ export const SettingsPanel = ({
     setAppDescription,
     logoUrl,
     setLogoUrl,
-    bgRefreshTrigger,
+    // bgRefreshTrigger, // Unused
     refreshBackground,
     backgroundUrl,
     setBackgroundUrl,
@@ -102,14 +102,7 @@ export const SettingsPanel = ({
     };
     const bgFilename = getBgFilename();
 
-    // Fetch knowledge files on open or tab switch
-    useEffect(() => {
-        if (isOpen && activeTab === 'knowledge') {
-            fetchKnowledgeFiles();
-        }
-    }, [isOpen, activeTab]);
-
-    const fetchKnowledgeFiles = async () => {
+    const fetchKnowledgeFiles = useCallback(async () => {
         try {
             if (!currentProfileId) return;
             const res = await fetch(`/api/profiles/${currentProfileId}/knowledge`);
@@ -120,7 +113,16 @@ export const SettingsPanel = ({
         } catch (err) {
             console.error('Failed to fetch knowledge files', err);
         }
-    };
+    }, [currentProfileId]);
+
+    // Fetch knowledge files on open or tab switch
+    useEffect(() => {
+        if (isOpen && activeTab === 'knowledge') {
+            fetchKnowledgeFiles();
+        }
+    }, [isOpen, activeTab, fetchKnowledgeFiles]);
+
+
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];

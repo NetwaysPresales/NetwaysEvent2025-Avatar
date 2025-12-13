@@ -34,7 +34,8 @@ export default function AvatarPage() {
     const router = useRouter();
     const {
         speechConfig, avatarConfig, ttsConfig, openAIConfig, sttConfig,
-        theme, backgroundUrl, appTitle, logoUrl
+        theme, backgroundUrl, appTitle, logoUrl,
+        currentProfile // Destructure currentProfile to check readiness
     } = useSettings();
 
     // Auto-scroll ref
@@ -215,13 +216,18 @@ export default function AvatarPage() {
         await startSession();
     }, [speechConfig, openAIConfig, startSession]);
 
-    // Auto-start session on mount - STRICT RUN ONCE
+    // Auto-start session on mount - STRICT RUN ONCE BUT WAIT FOR PROFILE
     const hasStartedRef = useRef(false);
     useEffect(() => {
         // Strict guard: never run if already blocked or started
+        // Also wait for currentProfile to be loaded (not null)
         if (hasStartedRef.current || avatarSessionStarted) return;
+        if (!currentProfile) {
+            console.log('[AvatarPage] Waiting for profile to load...');
+            return;
+        }
 
-        console.log('[AvatarPage] Auto-starting session...');
+        console.log('[AvatarPage] Auto-starting session with profile:', currentProfile.name);
         hasStartedRef.current = true;
 
         // Small delay to ensure clean mount
@@ -238,7 +244,7 @@ export default function AvatarPage() {
             // Reset ref on unmount so re-entry works
             hasStartedRef.current = false;
         };
-    }, []); // Empty dependency array to ensure absolutely single execution check
+    }, [currentProfile, handleStartSession, avatarSessionStarted]); // Depend on currentProfile
 
 
     // Mic interaction
@@ -300,10 +306,7 @@ export default function AvatarPage() {
         // Check if content overflows
         if (container.scrollHeight > container.clientHeight) {
             let scrollFrameId: number;
-            let timeoutId: NodeJS.Timeout;
-
-            // Wait before starting to scroll to let user read the beginning
-            timeoutId = setTimeout(() => {
+            const timeoutId: NodeJS.Timeout = setTimeout(() => {
                 // Target: ~3 words/second match
                 // Assumption: ~10 words/line, ~24px line height -> ~3.3s/line -> ~7px/s
                 // at 60fps: 7/60 ~= 0.12 pixels/frame

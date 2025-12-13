@@ -32,6 +32,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         const stats = await fs.stat(filePath);
         const stream = createReadStream(filePath);
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return new NextResponse(stream as any, {
             headers: {
                 'Content-Type': getMimeType(filename),

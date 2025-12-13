@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, Dispatch, SetStateAction } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, Dispatch, SetStateAction, useCallback } from 'react';
 import type { AvatarConfig, SpeechConfig, TTSConfig, AzureOpenAIConfig, STTConfig } from '@/types/avatar';
 import {
     getDefaultSpeechConfig,
@@ -87,17 +87,7 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
     const [profiles, setProfiles] = useState<AvatarProfile[]>([]);
     const [currentProfile, setCurrentProfile] = useState<AvatarProfile | null>(null);
 
-    // Initial Load
-    useEffect(() => {
-        refreshProfiles().then(async (loadedProfiles) => {
-            if (loadedProfiles.length > 0) {
-                // Try load last used or default
-                const lastId = window.localStorage.getItem('lastProfileId');
-                const target = lastId ? loadedProfiles.find(p => p.id === lastId) : loadedProfiles[0];
-                if (target) await loadProfile(target.id);
-            }
-        });
-    }, []);
+
 
     // Sync title/meta
     useEffect(() => {
@@ -106,9 +96,9 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
         if (metaDesc) metaDesc.setAttribute('content', appDescription);
     }, [appTitle, appDescription]);
 
-    const refreshProfiles = async () => {
+    const refreshProfiles = useCallback(async () => {
         try {
-            const res = await fetch('/api/profiles');
+            const res = await fetch('/api/profiles', { cache: 'no-store' });
             const data = await res.json();
             if (data.profiles) {
                 setProfiles(data.profiles);
@@ -118,11 +108,23 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
             console.error('Failed to load profiles', e);
         }
         return [];
-    };
+    }, []);
+
+    // Initial Load
+    useEffect(() => {
+        refreshProfiles().then(async (loadedProfiles: AvatarProfile[]) => {
+            if (loadedProfiles.length > 0) {
+                // Try load last used or default
+                const lastId = window.localStorage.getItem('lastProfileId');
+                const target = lastId ? loadedProfiles.find((p: AvatarProfile) => p.id === lastId) : loadedProfiles[0];
+                if (target) await loadProfile(target.id);
+            }
+        });
+    }, [refreshProfiles]);
 
     const loadProfile = async (id: string) => {
         try {
-            const res = await fetch(`/api/profiles/${id}`);
+            const res = await fetch(`/api/profiles/${id}`, { cache: 'no-store' });
             const profile = await res.json();
 
             if (profile && !profile.error) {

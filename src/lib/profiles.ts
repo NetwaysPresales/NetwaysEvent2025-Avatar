@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { AvatarProfile } from '@/types/profile';
-import { getDefaultAvatarConfig, getDefaultSpeechConfig, getDefaultAzureOpenAIConfig } from './config';
+import { getDefaultAvatarConfig, getDefaultSpeechConfig, getDefaultAzureOpenAIConfig, getDefaultTTSConfig } from './config';
 
 const PROFILES_DIR = path.join(process.cwd(), 'data', 'profiles');
 
@@ -65,6 +65,7 @@ export async function createProfile(name: string, idOverride?: string): Promise<
         avatarConfig: getDefaultAvatarConfig(),
         speechConfig: getDefaultSpeechConfig(),
         openAIConfig: getDefaultAzureOpenAIConfig(),
+        ttsConfig: getDefaultTTSConfig(),
         logo: null,
         background: null,
         appTitle: 'Netways Avatar',
