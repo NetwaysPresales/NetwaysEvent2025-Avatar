@@ -56,7 +56,6 @@ export function useAgent({ openAIConfig }: UseAgentProps) {
             if (reply) {
                 // If API returned an entity, use it directly
                 if (entityDetails) {
-                    console.log('[UI] Received entity from agent:', entityDetails.name);
                     updateEntityState(entityDetails, true);
                 } else {
                     updateEntityState(null, false);

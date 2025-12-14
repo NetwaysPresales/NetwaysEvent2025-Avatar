@@ -1,71 +1,129 @@
 import { NextRequest, NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import { createReadStream, existsSync } from 'fs';
-import path from 'path';
-import { getProfileDir } from '@/lib/profiles';
+import { requireAuth } from '@/lib/auth';
+import { getProfileAssetUrl, uploadProfileAsset } from '@/lib/profile-service';
 
-// Helper to determine mime type
-const getMimeType = (filename: string) => {
-    const ext = path.extname(filename).toLowerCase();
-    if (ext === '.png') return 'image/png';
-    if (ext === '.jpg' || ext === '.jpeg') return 'image/jpeg';
-    if (ext === '.mp4') return 'video/mp4';
-    if (ext === '.webm') return 'video/webm';
-    return 'application/octet-stream';
-};
-
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+/**
+ * GET /api/profiles/[id]/assets
+ * Get a SAS URL for a profile asset (logo or background)
+ * 
+ * Query params:
+ * - assetType: 'logo' | 'background'
+ * - expiresInMinutes: number (optional, default: 60)
+ */
+export async function GET(
+    req: NextRequest,
+    { params }: { params: Promise<{ id: string }> }
+) {
     try {
+        const session = await requireAuth();
         const { id } = await params;
         const { searchParams } = new URL(req.url);
-        const filename = searchParams.get('file');
+        const assetType = searchParams.get('assetType') as 'logo' | 'background';
+        const expiresInMinutes = parseInt(searchParams.get('expiresInMinutes') || '60', 10);
 
-        if (!filename) return NextResponse.json({ error: 'File param required' }, { status: 400 });
-
-        const profileDir = await getProfileDir(id);
-        const filePath = path.join(profileDir, 'assets', path.basename(filename));
-
-        if (!existsSync(filePath)) {
-            return NextResponse.json({ error: 'File not found' }, { status: 404 });
+        if (!assetType || (assetType !== 'logo' && assetType !== 'background')) {
+            return NextResponse.json(
+                { error: 'assetType parameter required (logo or background)' },
+                { status: 400 }
+            );
         }
 
-        const stats = await fs.stat(filePath);
-        const stream = createReadStream(filePath);
+        // Generate SAS URL (profile service handles ownership verification)
+        const sasUrl = await getProfileAssetUrl(session.userId, id, assetType, expiresInMinutes);
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        return new NextResponse(stream as any, {
-            headers: {
-                'Content-Type': getMimeType(filename),
-                'Content-Length': stats.size.toString(),
-            },
-        });
+        // Redirect to SAS URL
+        return NextResponse.redirect(sasUrl);
     } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        if (errorMessage === 'Unauthorized') {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        if (errorMessage === 'Profile not found or unauthorized' || errorMessage.includes('Asset of type')) {
+            return NextResponse.json({ error: 'Asset not found' }, { status: 404 });
+        }
         console.error('Asset Fetch Error', error);
         return NextResponse.json({ error: 'Internal Error' }, { status: 500 });
     }
 }
 
-export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+/**
+ * POST /api/profiles/[id]/assets
+ * Upload a profile asset (logo or background) to Blob Storage
+ * 
+ * Form data:
+ * - file: File
+ * - assetType: 'logo' | 'background'
+ */
+export async function POST(
+    req: NextRequest,
+    { params }: { params: Promise<{ id: string }> }
+) {
     try {
+        const session = await requireAuth();
         const { id } = await params;
         const formData = await req.formData();
         const file = formData.get('file') as File;
+        const assetType = formData.get('assetType') as 'logo' | 'background';
 
-        if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+        if (!file) {
+            return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+        }
 
+        if (!assetType || (assetType !== 'logo' && assetType !== 'background')) {
+            return NextResponse.json(
+                { error: 'assetType parameter required (logo or background)' },
+                { status: 400 }
+            );
+        }
+
+        // Validate file size
+        const maxSize = assetType === 'logo' ? 5 * 1024 * 1024 : 50 * 1024 * 1024; // 5MB logo, 50MB background
+        if (file.size > maxSize) {
+            return NextResponse.json(
+                { error: `File too large. Maximum size: ${maxSize / 1024 / 1024}MB` },
+                { status: 400 }
+            );
+        }
+
+        // Validate file type
+        const allowedTypes = assetType === 'logo'
+            ? ['image/png', 'image/jpeg', 'image/jpg']
+            : ['image/png', 'image/jpeg', 'image/jpg', 'video/mp4', 'video/webm'];
+
+        if (!allowedTypes.includes(file.type)) {
+            return NextResponse.json(
+                { error: `Invalid file type. Allowed: ${allowedTypes.join(', ')}` },
+                { status: 400 }
+            );
+        }
+
+        // Upload asset using profile service (handles ownership verification, blob upload, DB update, and transaction guarantees)
         const buffer = Buffer.from(await file.arrayBuffer());
-        const cleanName = path.basename(file.name).replace(/[^a-zA-Z0-9.-]/g, '_');
-        const filename = `${Date.now()}-${cleanName}`;
+        const result = await uploadProfileAsset(
+            session.userId,
+            id,
+            assetType,
+            buffer,
+            file.name,
+            file.type
+        );
 
-        const profileDir = await getProfileDir(id);
-        const filePath = path.join(profileDir, 'assets', filename);
-
-        await fs.writeFile(filePath, buffer);
-
-        // Return the asset URL that can be used with GET
-        const assetUrl = `/api/profiles/${id}/assets?file=${filename}`;
-        return NextResponse.json({ url: assetUrl, filename });
+        return NextResponse.json({
+            url: result.sasUrl,
+            blobUrl: result.blobUrl,
+            filename: result.filename,
+        });
     } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        if (errorMessage === 'Unauthorized') {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        if (errorMessage === 'Profile not found or unauthorized') {
+            return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
+        }
+        if (errorMessage.includes('Failed to upload asset')) {
+            return NextResponse.json({ error: errorMessage }, { status: 500 });
+        }
         console.error('Asset Upload Error', error);
         return NextResponse.json({ error: 'Upload Failed' }, { status: 500 });
     }

@@ -124,9 +124,6 @@ export function useSpeechRecognition({
       recognizer.recognized = (s, e) => {
         if (e.result.reason === SpeechSDK.ResultReason.RecognizedSpeech) {
           const text = e.result.text.trim();
-          // Log detected language for debugging
-          const detectedLanguage = e.result.language || 'unknown';
-          console.log('Speech recognized:', text, '| Detected language:', detectedLanguage);
 
           if (text) {
             setRecognizedText(text);
@@ -140,7 +137,6 @@ export function useSpeechRecognition({
                 if (recognizerRef.current) {
                   recognizerRef.current.stopContinuousRecognitionAsync(
                     () => {
-                      console.log('Recognition stopped after utterance');
                       setIsListening(false);
                       setIsStarting(false);
                     },
@@ -165,7 +161,6 @@ export function useSpeechRecognition({
       };
 
       recognizer.sessionStopped = () => {
-        console.log('[STT] Session stopped');
         setIsListening(false);
         setIsStarting(false);
       };

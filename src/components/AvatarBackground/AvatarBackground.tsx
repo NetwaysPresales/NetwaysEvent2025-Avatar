@@ -1,12 +1,16 @@
+'use client';
+
 import React, { useEffect, useRef } from 'react';
 import Image from 'next/image';
+import { useTheme } from '@/hooks/useTheme';
 
 type Props = {
-    theme?: 'dark' | 'light';
-    src?: string | null;
+    backgroundUrl?: string | null;
 };
 
-export const AvatarBackground = ({ theme = 'dark', src }: Props) => {
+export const AvatarBackground = ({ backgroundUrl }: Props) => {
+    const theme = useTheme();
+    const src = backgroundUrl;
     const videoRef = useRef<HTMLVideoElement>(null);
 
     useEffect(() => {

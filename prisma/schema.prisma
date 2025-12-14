@@ -1,0 +1,203 @@
+// Prisma Schema
+// This file defines the database schema for the multi-user avatar application
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(uuid()) @db.Uuid
+  email     String   @unique @db.VarChar(255)
+  name      String?  @db.VarChar(255)
+  azureAdId String?  @unique @map("azure_ad_id") @db.VarChar(255)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  profiles        Profile[]
+  knowledgeFiles  KnowledgeFile[]
+  entityTemplates EntityTemplate[]
+  entityInstances EntityInstance[]
+  conversations   Conversation[]
+  profileBackups  ProfileBackup[]
+
+  @@index([email], name: "idx_users_email")
+  @@index([azureAdId], name: "idx_users_azure_ad_id")
+  @@map("users")
+}
+
+model Profile {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  name      String   @db.VarChar(255)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Configurations (JSONB)
+  avatarConfig Json @map("avatar_config")
+  speechConfig Json @map("speech_config")
+  ttsConfig    Json @map("tts_config")
+  openaiConfig Json @map("openai_config")
+  sttConfig    Json @map("stt_config")
+
+  // Appearance
+  appTitle       String? @map("app_title") @db.VarChar(255)
+  appDescription String? @map("app_description") @db.Text
+  theme          String  @default("light") @db.VarChar(20)
+  accentColor    Json?   @map("accent_color")
+
+  // Asset references (Blob Storage URLs)
+  logoBlobUrl       String? @map("logo_blob_url") @db.VarChar(500)
+  backgroundBlobUrl String? @map("background_blob_url") @db.VarChar(500)
+
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  knowledgeFiles  KnowledgeFile[]
+  entityTemplates EntityTemplate[]
+  entityInstances EntityInstance[]
+  conversations   Conversation[]
+  profileBackups  ProfileBackup[]
+
+  @@index([userId], name: "idx_profiles_user_id")
+  @@index([createdAt], name: "idx_profiles_created_at")
+  @@map("profiles")
+}
+
+model KnowledgeFile {
+  id                 String    @id @default(uuid()) @db.Uuid
+  userId             String    @map("user_id") @db.Uuid
+  profileId          String    @map("profile_id") @db.Uuid
+  filename           String    @db.VarChar(255)
+  blobUrl            String    @map("blob_url") @db.VarChar(500)
+  azureSearchIndexed Boolean   @default(false) @map("azure_search_indexed")
+  chunkCount         Int       @default(0) @map("chunk_count")
+  indexedAt          DateTime? @map("indexed_at") @db.Timestamptz(6)
+  embeddingModel     String    @default("text-embedding-ada-002") @map("embedding_model") @db.VarChar(50)
+  uploadedAt         DateTime  @default(now()) @map("uploaded_at") @db.Timestamptz(6)
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([userId, profileId], name: "idx_knowledge_files_user_profile")
+  @@index([azureSearchIndexed], name: "idx_knowledge_files_indexed")
+  @@map("knowledge_files")
+}
+
+model EntityTemplate {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  profileId   String   @map("profile_id") @db.Uuid
+  name        String   @db.VarChar(255)
+  description String?  @db.Text
+  structure   Json
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profile         Profile          @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  entityInstances EntityInstance[]
+
+  @@unique([profileId, name], name: "unique_template_name_per_profile")
+  @@index([userId, profileId], name: "idx_entity_templates_user_profile")
+  @@map("entity_templates")
+}
+
+model EntityInstance {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  profileId   String   @map("profile_id") @db.Uuid
+  templateId  String   @map("template_id") @db.Uuid
+  name        String   @db.VarChar(255)
+  identifier  String   @db.VarChar(255)
+  description String?  @db.Text
+  data        Json
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profile    Profile           @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  template   EntityTemplate    @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  mediaFiles EntityMediaFile[]
+
+  @@unique([profileId, identifier], name: "unique_identifier_per_profile")
+  @@index([userId, profileId], name: "idx_entity_instances_user_profile")
+  @@index([profileId, identifier], name: "idx_entity_instances_identifier")
+  @@map("entity_instances")
+}
+
+model EntityMediaFile {
+  id               String   @id @default(uuid()) @db.Uuid
+  entityInstanceId String   @map("entity_instance_id") @db.Uuid
+  fieldId          String   @map("field_id") @db.VarChar(255)
+  blobUrl          String   @map("blob_url") @db.VarChar(500)
+  blobContainer    String   @default("entity-media") @map("blob_container") @db.VarChar(100)
+  blobName         String   @map("blob_name") @db.VarChar(255)
+  fileType         String   @map("file_type") @db.VarChar(50)
+  mimeType         String   @map("mime_type") @db.VarChar(100)
+  fileSize         BigInt?  @map("file_size")
+  width            Int?
+  height           Int?
+  duration         Int?
+  altText          String?  @map("alt_text") @db.Text
+  caption          String?  @db.Text
+  orderIndex       Int      @default(0) @map("order_index")
+  uploadedAt       DateTime @default(now()) @map("uploaded_at") @db.Timestamptz(6)
+
+  entityInstance EntityInstance @relation(fields: [entityInstanceId], references: [id], onDelete: Cascade)
+
+  @@index([entityInstanceId], name: "idx_entity_media_files_entity_id")
+  @@map("entity_media_files")
+}
+
+model Conversation {
+  id        String   @id @default(uuid()) @db.Uuid
+  profileId String   @map("profile_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  profile  Profile               @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  user     User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages ConversationMessage[]
+
+  @@index([profileId], name: "idx_conversations_profile_id")
+  @@index([userId], name: "idx_conversations_user_id")
+  @@map("conversations")
+}
+
+model ConversationMessage {
+  id             String                  @id @default(uuid()) @db.Uuid
+  conversationId String                  @map("conversation_id") @db.Uuid
+  role           ConversationMessageRole
+  content        String                  @db.Text
+  createdAt      DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId], name: "idx_conversation_messages_conversation_id")
+  @@map("conversation_messages")
+}
+
+enum ConversationMessageRole {
+  user
+  assistant
+  system
+}
+
+model ProfileBackup {
+  id        String   @id @default(uuid()) @db.Uuid
+  profileId String   @map("profile_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  backupUrl String   @map("backup_url") @db.VarChar(500)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([profileId], name: "idx_profile_backups_profile_id")
+  @@index([userId], name: "idx_profile_backups_user_id")
+  @@map("profile_backups")
+}

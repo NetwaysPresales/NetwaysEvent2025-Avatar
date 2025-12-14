@@ -6,21 +6,46 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:studio": "prisma studio",
+    "db:push": "prisma db push",
+    "test:db": "tsx scripts/test-db.ts",
+    "test:db:insert": "tsx scripts/test-db-insert.ts",
+    "test:blob": "tsx scripts/test-blob-storage.ts",
+    "test:assets": "tsx scripts/test-real-assets.ts",
+    "test:profile-service": "tsx scripts/test-profile-service.ts",
+    "test:api": "tsx scripts/test-api-routes.ts",
+    "test:auth": "tsx scripts/test-auth.ts",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@azure/identity": "^4.13.0",
+    "@azure/keyvault-secrets": "^4.10.0",
+    "@azure/storage-blob": "^12.29.1",
     "@langchain/community": "^0.3.57",
     "@langchain/langgraph": "^0.4.9",
     "@langchain/openai": "^0.6.14",
+    "@prisma/adapter-pg": "^7.1.0",
+    "@prisma/client": "^7.1.0",
     "@tavily/core": "^0.5.12",
+    "@types/pg": "^8.16.0",
+    "@upstash/ratelimit": "^2.0.7",
+    "@upstash/redis": "^1.35.8",
+    "dotenv": "^17.2.3",
     "framer-motion": "^12.23.22",
     "langchain": "^0.3.35",
     "microsoft-cognitiveservices-speech-sdk": "^1.46.0",
     "next": "^15.5.7",
+    "next-auth": "^4.24.13",
+    "pg": "^8.16.3",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "zod": "^4.1.13"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
@@ -30,7 +55,9 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "15.5.4",
+    "prisma": "^7.1.0",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }

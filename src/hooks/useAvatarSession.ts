@@ -41,7 +41,6 @@ export function useAvatarSession({
 
   // Update state and notify parent
   const updateState = useCallback((newState: SessionState) => {
-    console.log('[Avatar] State change:', newState);
     setState(newState);
     onStateChange?.(newState);
   }, [onStateChange]);
@@ -93,17 +92,14 @@ export function useAvatarSession({
           try {
             const eventData: AvatarEventData = JSON.parse(e.data);
             onEvent?.(eventData);
-            console.log('Avatar event:', eventData);
 
             // Auto-reconnect on SESSION_END (Azure sample pattern)
             if (eventData.event.eventType === 'EVENT_TYPE_SESSION_END') {
-              console.log('[Avatar] SESSION_END received');
               if (sessionActiveRef.current && !isReconnectingRef.current) {
                 const idleMs = Date.now() - lastInteractionRef.current.getTime();
                 const maxIdleMs = autoReconnectMs ?? 300000; // 5 minutes default
                 // Reconnect if last interaction was within the timeout window
                 if (idleMs < maxIdleMs) {
-                  console.log('[Avatar] Auto-reconnecting (last interaction:', Math.floor(idleMs / 1000), 's ago)');
                   isReconnectingRef.current = true;
 
                   // Trigger event to show meg.png before reconnection
@@ -124,14 +120,12 @@ export function useAvatarSession({
                   }
                   // Reconnect after brief delay
                   setTimeout(() => {
-                    console.log('[Avatar] Starting reconnection...');
                     updateState('connecting');
                     if (startSessionRef.current) {
                       startSessionRef.current();
                     }
                   }, 1500);
                 } else {
-                  console.log('[Avatar] No reconnect: idle too long (', Math.floor(idleMs / 1000), 's)');
                   sessionActiveRef.current = false;
                   updateState('idle');
                 }
@@ -145,7 +139,6 @@ export function useAvatarSession({
 
       // Monitor connection state
       peerConnection.oniceconnectionstatechange = () => {
-        console.log('ICE connection state:', peerConnection.iceConnectionState);
         if (peerConnection.iceConnectionState === 'connected') {
           updateState('connected');
           sessionActiveRef.current = true;
@@ -215,26 +208,23 @@ export function useAvatarSession({
       avatarSynthesizerRef.current = avatarSynthesizer;
 
       // Setup avatar event handler
-      avatarSynthesizer.avatarEventReceived = (s, e) => {
-        console.log(`Avatar event: ${e.description}, offset: ${e.offset / 10000}ms`);
+      avatarSynthesizer.avatarEventReceived = () => {
+        // Event received (can be used for debugging if needed)
       };
 
       // Start avatar
       const result = await avatarSynthesizer.startAvatarAsync(peerConnection);
 
       if (result.reason === SpeechSDK.ResultReason.SynthesizingAudioCompleted) {
-        console.log('[Avatar] Started successfully. Result ID:', result.resultId);
         lastInteractionRef.current = new Date();
         isReconnectingRef.current = false;
 
         // Ensure state is properly set to connected
         updateState('connected');
-        console.log('[Avatar] State set to connected');
 
         // Mark session active after 5s to allow WebRTC to stabilize (like Azure sample)
         setTimeout(() => {
           sessionActiveRef.current = true;
-          console.log('[Avatar] Session marked as active');
           // Double-check state is still connected after stabilization
           updateState('connected');
         }, 5000);
@@ -294,9 +284,7 @@ export function useAvatarSession({
 
       const result = await avatarSynthesizerRef.current.speakSsmlAsync(ssml);
 
-      if (result.reason === SpeechSDK.ResultReason.SynthesizingAudioCompleted) {
-        console.log('Speech synthesized successfully');
-      } else {
+      if (result.reason !== SpeechSDK.ResultReason.SynthesizingAudioCompleted) {
         console.error('Speech synthesis failed:', result.errorDetails);
       }
 

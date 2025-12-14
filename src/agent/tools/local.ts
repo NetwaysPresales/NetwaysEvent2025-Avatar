@@ -2,7 +2,11 @@ import { tool } from '@langchain/core/tools';
 import fs from 'fs/promises';
 import path from 'path';
 
-// Define path to knowledge base
+/**
+ * NOTE: This tool uses file system temporarily for entity lookup.
+ * This will be replaced with the entity visualization system (see CONSOLIDATED_PLAN.md Part 6.5).
+ * The file system dependency is acceptable for now but should be migrated to database + blob storage.
+ */
 const KNOWLEDGE_FILE = path.join(process.cwd(), 'src', 'knowledge', 'sca_entities.json');
 
 interface Entity {
@@ -16,7 +20,6 @@ export function localRetrieverTool() {
   return tool(
     async (input: string) => {
       let key = input.trim().toLowerCase();
-      console.log('[Tool] Searching for company:', key);
 
       // Load entities dynamically
       let entities: Entity[] = [];
@@ -31,7 +34,6 @@ export function localRetrieverTool() {
       // Handle common variations for "4T Global Markets"
       if (key.includes('40 global') || key.includes('forty global') || key.includes('fourty global')) {
         key = '4t global markets';
-        console.log('[Tool] Normalized to:', key);
       }
 
       // Find entity by matching name (prioritize exact matches first)
@@ -41,7 +43,6 @@ export function localRetrieverTool() {
 
         // Exact match (highest priority)
         if (name === cleanKey || name.replace(/\s+/g, ' ') === cleanKey) {
-          console.log('[Tool] Exact match found:', e.name);
           return true;
         }
         return false;
@@ -51,20 +52,14 @@ export function localRetrieverTool() {
       if (!found) {
         found = entities.find((e) => {
           const name = e.name.toLowerCase().replace(/\s*pjsc\s*/g, '').trim();
-          const matches = name.includes(key) || key.includes(name);
-          if (matches) {
-            console.log('[Tool] Partial match found:', e.name);
-          }
-          return matches;
+          return name.includes(key) || key.includes(name);
         });
       }
 
       if (!found) {
-        console.log('[Tool] No match found for:', key);
         return 'No information available.';
       }
 
-      console.log('[Tool] Returning entity:', found.name, 'License:', found.license);
       // Return marker for API to extract, followed by narration for agent to speak
       return `[SHOW_ENTITY:${found.license}]\n${found.narration || found.name}`;
     },

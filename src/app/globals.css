@@ -1,19 +1,54 @@
 @import "tailwindcss";
 
+/* Theme Variables - Light Mode (Default) */
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --bg-primary: #fafafa;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f4f4f5;
+  --text-primary: #18181b;
+  --text-secondary: #71717a;
+  --text-tertiary: #a1a1aa;
+  --border-color: #e4e4e7;
+  --border-hover: #d4d4d8;
+  
+  /* Accent Colors (Default: Emerald) */
+  --accent-primary: #10b981;
+  --accent-primary-hover: #34d399;
+  --accent-primary-light: #d1fae5;
+  --accent-primary-dark: #059669;
+  --accent-focus-ring: rgba(16, 185, 129, 0.5);
+  --accent-text: #ffffff;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Theme Variables - Dark Mode */
+[data-theme="dark"],
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  --bg-primary: #000000;
+  --bg-secondary: #18181b;
+  --bg-tertiary: #27272a;
+  --text-primary: #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-tertiary: #71717a;
+  --border-color: #27272a;
+  --border-hover: #3f3f46;
+  
+  /* Accent colors remain the same, but may need adjustment for dark mode */
+  --accent-primary-light: rgba(16, 185, 129, 0.2);
 }
 
 @theme inline {
   --font-sans: var(--font-outfit);
+}
+
+/* Styled Select Options */
+select option {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  padding: 0.5rem;
 }
 
 /* Sleek Scrollbar - Floating Style */
@@ -56,4 +91,10 @@ body {
   font-family: var(--font-outfit), system-ui, -apple-system, sans-serif;
   font-weight: 400;
   letter-spacing: -0.015em;
+}
+
+/* Remove left and top positioning from nextjs-portal */
+nextjs-portal {
+  left: unset;
+  top: unset;
 }
