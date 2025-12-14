@@ -20,12 +20,13 @@ export const Textarea: React.FC<TextareaProps> = ({
   helperText,
   className = '',
   id,
+  style,
   ...props
 }) => {
   const generatedId = useId();
   const textareaId = id || generatedId;
 
-  const baseClasses = 'w-full px-4 py-2.5 rounded-lg border transition-all focus:outline-none focus:ring-2 focus:ring-[var(--accent-focus-ring)] disabled:opacity-50 disabled:cursor-not-allowed font-light resize-y';
+  const baseClasses = 'w-full px-4 py-2.5 rounded-lg border transition-all focus:outline-none focus:ring-2 focus:ring-[var(--accent-focus-ring)] disabled:opacity-50 disabled:cursor-not-allowed font-light resize-y min-h-[120px] overflow-auto';
   
   const themeClasses = 'bg-[var(--bg-secondary)] border-[var(--border-color)] text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[var(--accent-primary)]';
   
@@ -41,6 +42,7 @@ export const Textarea: React.FC<TextareaProps> = ({
       <textarea
         id={textareaId}
         className={`${baseClasses} ${themeClasses} ${errorClasses} ${className}`}
+        style={style}
         aria-invalid={error ? 'true' : undefined}
         aria-describedby={error ? `${textareaId}-error` : helperText ? `${textareaId}-helper` : undefined}
         {...props}

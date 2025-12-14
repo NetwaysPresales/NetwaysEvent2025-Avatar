@@ -57,7 +57,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({ className = '' }) => {
       <button
         onClick={() => setIsOpen(!isOpen)}
         type="button"
-        className={`p-2 rounded-md transition-all duration-200 ${
+        className={`p-2 rounded-full transition-all duration-200 ${
           theme === 'light' 
             ? 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 focus:bg-zinc-100 focus:text-zinc-900' 
             : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 focus:bg-zinc-800 focus:text-zinc-200'
@@ -80,7 +80,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({ className = '' }) => {
             onClick={() => setIsOpen(false)}
           />
           <div
-            className={`absolute top-full mt-2 w-64 rounded-lg shadow-xl border z-50 ${
+            className={`absolute top-full mt-3 w-64 rounded-lg shadow-xl border z-50 ${
               theme === 'light'
                 ? 'bg-white border-zinc-200'
                 : 'bg-zinc-900 border-zinc-800'

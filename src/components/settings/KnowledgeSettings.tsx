@@ -10,7 +10,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useProfile } from '@/context/ProfileContext';
 import { useTheme } from '@/hooks/useTheme';
 import { Button } from '@/components/ui';
-import { AssetUpload } from '@/components/AssetUpload';
+import { DragDropUpload } from '@/components/AssetUpload/DragDropUpload';
 
 interface KnowledgeSettingsProps {
   profileId: string;
@@ -60,11 +60,13 @@ export const KnowledgeSettings: React.FC<KnowledgeSettingsProps> = ({
       </h3>
 
       <div className="space-y-4">
-        <AssetUpload
-          profileId={profileId}
-          assetType="knowledge"
+        <DragDropUpload
+          endpoint={`/api/profiles/${profileId}/knowledge`}
+          accept=".pdf,.txt,.md"
           onUploadComplete={() => loadFiles()}
           maxSizeMB={50}
+          useBlobUrl={false}
+          showAcceptedTypes={true}
         />
 
         {isLoading ? (

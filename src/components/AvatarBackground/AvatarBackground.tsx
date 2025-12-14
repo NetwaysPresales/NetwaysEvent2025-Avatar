@@ -3,15 +3,31 @@
 import React, { useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useTheme } from '@/hooks/useTheme';
+import { useMediaUrl } from '@/hooks/useMediaUrl';
 
 type Props = {
     backgroundUrl?: string | null;
 };
 
+/**
+ * Check if a URL is a blob storage URL (needs SAS token)
+ */
+function isBlobUrl(url: string | null): boolean {
+  if (!url) return false;
+  // Check if it's an Azure Blob Storage URL
+  return url.includes('.blob.core.windows.net') && !url.includes('?sig=');
+}
+
 export const AvatarBackground = ({ backgroundUrl }: Props) => {
     const theme = useTheme();
-    const src = backgroundUrl;
     const videoRef = useRef<HTMLVideoElement>(null);
+    
+    // If it's a blob URL, convert it to SAS URL
+    const isBlob = isBlobUrl(backgroundUrl);
+    const authenticatedUrl = useMediaUrl(isBlob ? backgroundUrl : null, { enabled: isBlob });
+    
+    // Use authenticated URL if available, otherwise use original (API endpoint or already SAS URL)
+    const src = authenticatedUrl || backgroundUrl;
 
     useEffect(() => {
         if (videoRef.current) {

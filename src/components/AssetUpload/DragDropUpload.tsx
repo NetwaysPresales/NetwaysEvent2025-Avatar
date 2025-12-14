@@ -2,7 +2,8 @@
  * Drag and Drop Upload Component
  * 
  * Enhanced upload component with drag-and-drop, click-to-upload, and clipboard paste support.
- * Used specifically for logo and background uploads in AppearanceSettings.
+ * Supports logo, background, and knowledge file uploads with configurable accepted file types.
+ * Displays accepted file types and validates both MIME types and file extensions.
  */
 
 'use client';
@@ -11,25 +12,29 @@ import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { Button } from '@/components/ui';
 
 export interface DragDropUploadProps {
-  profileId: string;
-  assetType: 'logo' | 'background';
+  endpoint: string;
+  accept: string;
   onUploadComplete?: (url: string, filename: string) => void;
   onError?: (error: string) => void;
-  accept?: string;
   maxSizeMB?: number;
   className?: string;
   label?: string;
+  showAcceptedTypes?: boolean;
+  useBlobUrl?: boolean;
+  formDataFields?: Record<string, string>;
 }
 
 export const DragDropUpload: React.FC<DragDropUploadProps> = ({
-  profileId,
-  assetType,
+  endpoint,
+  accept,
   onUploadComplete,
   onError,
-  accept,
   maxSizeMB,
   className = '',
   label,
+  showAcceptedTypes = true,
+  useBlobUrl = false,
+  formDataFields,
 }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -40,32 +45,81 @@ export const DragDropUpload: React.FC<DragDropUploadProps> = ({
   const dragCounterRef = useRef(0);
 
   // Memoize constants to avoid recalculation
-  const defaultMaxSize = useMemo(() => (assetType === 'logo' ? 5 : 50), [assetType]);
-  const maxSize = useMemo(() => (maxSizeMB || defaultMaxSize) * 1024 * 1024, [maxSizeMB, defaultMaxSize]);
-  
-  const defaultAccept = useMemo(() => 
-    assetType === 'logo'
-      ? 'image/png,image/jpeg,image/jpg'
-      : 'image/png,image/jpeg,image/jpg,video/mp4,video/webm',
-    [assetType]
-  );
+  const maxSize = useMemo(() => (maxSizeMB || 50) * 1024 * 1024, [maxSizeMB]);
 
   const acceptedTypes = useMemo(() => {
-    const types = (accept || defaultAccept).split(',').map(t => t.trim());
+    const types = accept.split(',').map(t => t.trim());
     return types;
-  }, [accept, defaultAccept]);
+  }, [accept]);
+
+  // Format accepted types for display (deduplicated)
+  const displayAcceptedTypes = useMemo(() => {
+    const extensionSet = new Set<string>();
+    
+    acceptedTypes
+      .filter(type => type !== '*/*')
+      .forEach(type => {
+        // Convert MIME types to file extensions for display
+        if (type.startsWith('.')) {
+          extensionSet.add(type.toUpperCase());
+        } else if (type.includes('/')) {
+          const parts = type.split('/');
+          if (parts[1] === '*') {
+            extensionSet.add(parts[0].toUpperCase());
+          } else {
+            // Map common MIME types to extensions
+            const mimeMap: Record<string, string> = {
+              'image/png': '.PNG',
+              'image/jpeg': '.JPG',
+              'image/jpg': '.JPG',
+              'video/mp4': '.MP4',
+              'video/webm': '.WEBM',
+              'application/pdf': '.PDF',
+              'text/plain': '.TXT',
+              'text/markdown': '.MD',
+            };
+            const extension = mimeMap[type] || type.split('/')[1].toUpperCase();
+            extensionSet.add(extension);
+          }
+        } else {
+          extensionSet.add(type.toUpperCase());
+        }
+      });
+    
+    return Array.from(extensionSet).join(', ');
+  }, [acceptedTypes]);
 
   const validateFile = useCallback((file: File): string | null => {
     if (file.size > maxSize) {
-      return `File too large. Maximum size: ${maxSizeMB || defaultMaxSize}MB`;
+      return `File too large. Maximum size: ${maxSizeMB || 50}MB`;
     }
 
-    if (!acceptedTypes.includes(file.type) && !acceptedTypes.includes('*/*')) {
-      return `Invalid file type. Allowed: ${acceptedTypes.join(', ')}`;
+    // Check if wildcard is allowed
+    if (acceptedTypes.includes('*/*')) {
+      return null;
     }
 
-    return null;
-  }, [maxSize, maxSizeMB, defaultMaxSize, acceptedTypes]);
+    // Check MIME type
+    if (acceptedTypes.includes(file.type)) {
+      return null;
+    }
+
+    // Check file extension
+    const fileName = file.name.toLowerCase();
+    const fileExtension = fileName.substring(fileName.lastIndexOf('.'));
+    const hasMatchingExtension = acceptedTypes.some(type => {
+      if (type.startsWith('.')) {
+        return type.toLowerCase() === fileExtension;
+      }
+      return false;
+    });
+
+    if (hasMatchingExtension) {
+      return null;
+    }
+
+    return `Invalid file type. Allowed: ${displayAcceptedTypes || acceptedTypes.join(', ')}`;
+  }, [maxSize, maxSizeMB, acceptedTypes, displayAcceptedTypes]);
 
   const uploadFile = useCallback(async (file: File) => {
     // Prevent concurrent uploads
@@ -86,9 +140,13 @@ export const DragDropUpload: React.FC<DragDropUploadProps> = ({
     try {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('assetType', assetType);
-
-      const endpoint = `/api/profiles/${profileId}/assets`;
+      
+      // Append any additional form data fields
+      if (formDataFields) {
+        Object.entries(formDataFields).forEach(([key, value]) => {
+          formData.append(key, value);
+        });
+      }
 
       const res = await fetch(endpoint, {
         method: 'POST',
@@ -101,8 +159,12 @@ export const DragDropUpload: React.FC<DragDropUploadProps> = ({
       }
 
       const data = await res.json();
-      const url = data.blobUrl || data.url || '';
-      const filename = data.filename || file.name;
+      // Use blobUrl if useBlobUrl is true, otherwise use filename
+      // Check for nested mediaFile.blobUrl (entity media) or direct blobUrl
+      const url = useBlobUrl 
+        ? (data.mediaFile?.blobUrl || data.blobUrl || data.url || '')
+        : (data.filename || file.name);
+      const filename = data.filename || data.mediaFile?.filename || file.name;
 
       onUploadComplete?.(url, filename);
     } catch (err: unknown) {
@@ -116,7 +178,7 @@ export const DragDropUpload: React.FC<DragDropUploadProps> = ({
         fileInputRef.current.value = '';
       }
     }
-  }, [profileId, assetType, validateFile, onUploadComplete, onError, isUploading]);
+  }, [endpoint, formDataFields, validateFile, onUploadComplete, onError, isUploading, useBlobUrl]);
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -243,11 +305,11 @@ export const DragDropUpload: React.FC<DragDropUploadProps> = ({
         <input
           ref={fileInputRef}
           type="file"
-          accept={accept || defaultAccept}
+          accept={accept}
           onChange={handleFileSelect}
           disabled={isUploading}
           className="hidden"
-          id={`drag-drop-upload-${assetType}-${profileId}`}
+          id={`drag-drop-upload-${endpoint.replace(/[^a-zA-Z0-9]/g, '-')}`}
         />
 
         <div className="flex flex-col items-center justify-center text-center space-y-2">
@@ -277,7 +339,7 @@ export const DragDropUpload: React.FC<DragDropUploadProps> = ({
                 </p>
               </div>
               <Button
-                variant="secondary"
+                variant="primary"
                 size="sm"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -299,11 +361,18 @@ export const DragDropUpload: React.FC<DragDropUploadProps> = ({
         </p>
       )}
 
-      {maxSizeMB && (
-        <p className="mt-1 text-xs text-[var(--text-tertiary)]">
-          Max size: {maxSizeMB}MB
-        </p>
-      )}
+      <div className="mt-1 space-y-0.5">
+        {maxSizeMB && (
+          <p className="text-xs text-[var(--text-tertiary)]">
+            Max size: {maxSizeMB}MB
+          </p>
+        )}
+        {showAcceptedTypes && displayAcceptedTypes && (
+          <p className="text-xs text-[var(--text-tertiary)]">
+            Accepted: {displayAcceptedTypes}
+          </p>
+        )}
+      </div>
     </div>
   );
 };

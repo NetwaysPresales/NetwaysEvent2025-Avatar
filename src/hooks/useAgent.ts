@@ -1,24 +1,26 @@
 'use client';
 
 import { useRef, useState, useCallback } from 'react';
-import type { AzureOpenAIConfig, Entity } from '@/types/avatar';
+import type { AzureOpenAIConfig } from '@/types/avatar';
+import type { EntityVisualizationResult } from '@/types/entity-visualization';
 
 type UseAgentProps = {
     openAIConfig: AzureOpenAIConfig;
+    profileId: string;
 };
 
-export function useAgent({ openAIConfig }: UseAgentProps) {
-    const convoRef = useRef<string[]>([]);
+export function useAgent({ openAIConfig, profileId }: UseAgentProps) {
+    const conversationIdRef = useRef<string | null>(null);
     const processingRef = useRef(false);
     const lastMessageRef = useRef('');
-    const [currentEntity, setCurrentEntity] = useState<Entity | null>(null);
-    const currentEntityRef = useRef<Entity | null>(null);
-    const isSpeakingAboutCompanyRef = useRef(false);
+    const [currentEntityVisualization, setCurrentEntityVisualization] = useState<EntityVisualizationResult | null>(null);
+    const currentEntityVisualizationRef = useRef<EntityVisualizationResult | null>(null);
+    const isSpeakingAboutEntityRef = useRef(false);
 
-    const updateEntityState = useCallback((entity: Entity | null, isSpeaking: boolean) => {
-        setCurrentEntity(entity);
-        currentEntityRef.current = entity;
-        isSpeakingAboutCompanyRef.current = isSpeaking;
+    const updateEntityVisualization = useCallback((visualization: EntityVisualizationResult | null, isSpeaking: boolean) => {
+        setCurrentEntityVisualization(visualization);
+        currentEntityVisualizationRef.current = visualization;
+        isSpeakingAboutEntityRef.current = isSpeaking;
     }, []);
 
     const sendMessage = async (message: string): Promise<string | null> => {
@@ -33,14 +35,13 @@ export function useAgent({ openAIConfig }: UseAgentProps) {
         lastMessageRef.current = message;
 
         try {
-            convoRef.current.push(message);
             const res = await fetch('/api/agent', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    message,
-                    history: convoRef.current.slice(-12),
-                    systemPrompt: openAIConfig.systemPrompt
+                    userText: message,
+                    profileId,
+                    conversationId: conversationIdRef.current || undefined,
                 })
             });
 
@@ -49,19 +50,24 @@ export function useAgent({ openAIConfig }: UseAgentProps) {
                 return null;
             }
 
-            const data = await res.json().catch(() => ({ reply: '', entityDetails: null }));
+            const data = await res.json().catch(() => ({ reply: '', entityVisualization: null, conversationId: null }));
             const reply = String(data?.reply || '').trim();
-            const entityDetails = data?.entityDetails || null;
+            const entityVisualization = data?.entityVisualization || null;
+            const conversationId = data?.conversationId;
+
+            // Update conversation ID if provided
+            if (conversationId) {
+                conversationIdRef.current = conversationId;
+            }
 
             if (reply) {
-                // If API returned an entity, use it directly
-                if (entityDetails) {
-                    updateEntityState(entityDetails, true);
+                // If API returned entity visualization, use it directly
+                if (entityVisualization) {
+                    updateEntityVisualization(entityVisualization, true);
                 } else {
-                    updateEntityState(null, false);
+                    updateEntityVisualization(null, false);
                 }
 
-                convoRef.current.push(reply);
                 return reply;
             }
             return null;
@@ -78,9 +84,9 @@ export function useAgent({ openAIConfig }: UseAgentProps) {
 
     return {
         sendMessage,
-        currentEntity,
-        updateEntityState,
-        currentEntityRef,
-        isSpeakingAboutCompanyRef
+        currentEntityVisualization,
+        updateEntityVisualization,
+        currentEntityVisualizationRef,
+        isSpeakingAboutEntityRef
     };
 }

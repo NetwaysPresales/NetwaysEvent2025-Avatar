@@ -17,6 +17,7 @@ import { TTSSettings } from './TTSSettings';
 import { OpenAISettings } from './OpenAISettings';
 import { AppearanceSettings } from './AppearanceSettings';
 import { KnowledgeSettings } from './KnowledgeSettings';
+import { EntitySettings } from './EntitySettings';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -45,30 +46,38 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setShowOpenAIApiKey,
   } = useProfile();
 
-  const [activeTab, setActiveTab] = useState<'settings' | 'appearance' | 'knowledge'>('settings');
-
-  if (!isOpen || !hydrated || !currentProfile) return null;
-
   const theme = useTheme();
+  const [activeTab, setActiveTab] = useState<'settings' | 'appearance' | 'knowledge' | 'entities'>('settings');
+  const [isSaving, setIsSaving] = useState(false);
+
+  if (!isOpen || !hydrated || !currentProfile || isSaving) return null;
 
   const handleSave = async () => {
+    if (isSaving) return;
+    
+    setIsSaving(true);
+    // Close immediately to prevent content flash
+    onClose();
+    
     try {
       await saveProfile();
-      onClose();
     } catch (error) {
       console.error('Failed to save settings', error);
+      // Note: Modal is already closed, error handling would need a toast/notification
+    } finally {
+      setIsSaving(false);
     }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/50 backdrop-blur-sm">
-      <div className={`${theme === 'light' ? 'bg-white border-zinc-300' : 'bg-zinc-900 border-zinc-800'} border rounded-2xl shadow-2xl max-w-2xl w-full h-[700px] ring-1 ${theme === 'light' ? 'ring-zinc-200' : 'ring-white/10'} overflow-hidden flex flex-col`}>
+      <div className={`theme-transition ${theme === 'light' ? 'bg-white border-zinc-300' : 'bg-zinc-900 border-zinc-800'} border rounded-2xl shadow-2xl max-w-2xl w-full h-[700px] ring-1 ${theme === 'light' ? 'ring-zinc-200' : 'ring-white/10'} overflow-hidden flex flex-col`}>
         {/* Header with Tabs */}
-        <div className={`sticky top-0 ${theme === 'light' ? 'bg-white/95' : 'bg-zinc-900/95'} backdrop-blur-md border-b ${theme === 'light' ? 'border-zinc-200' : 'border-zinc-800'} px-6 py-4 flex items-center justify-between z-10`}>
+        <div className={`sticky top-0 theme-transition ${theme === 'light' ? 'bg-white/95' : 'bg-zinc-900/95'} backdrop-blur-md border-b ${theme === 'light' ? 'border-zinc-200' : 'border-zinc-800'} px-6 py-4 flex items-center justify-between z-10`}>
           <div className="flex gap-6">
             <button
               onClick={() => setActiveTab('settings')}
-              className={`relative text-xl font-light tracking-wide transition-colors ${activeTab === 'settings' ? (theme === 'light' ? 'text-zinc-900' : 'text-zinc-100') : (theme === 'light' ? 'text-zinc-400 hover:text-zinc-600' : 'text-zinc-500 hover:text-zinc-300')}`}
+              className={`relative text-xl font-light tracking-wide theme-transition transition-colors ${activeTab === 'settings' ? (theme === 'light' ? 'text-zinc-900' : 'text-zinc-100') : (theme === 'light' ? 'text-zinc-400 hover:text-zinc-600' : 'text-zinc-500 hover:text-zinc-300')}`}
             >
               Settings
               {activeTab === 'settings' && (
@@ -81,7 +90,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </button>
             <button
               onClick={() => setActiveTab('appearance')}
-              className={`relative text-xl font-light tracking-wide transition-colors ${activeTab === 'appearance' ? (theme === 'light' ? 'text-zinc-900' : 'text-zinc-100') : (theme === 'light' ? 'text-zinc-400 hover:text-zinc-600' : 'text-zinc-500 hover:text-zinc-300')}`}
+              className={`relative text-xl font-light tracking-wide theme-transition transition-colors ${activeTab === 'appearance' ? (theme === 'light' ? 'text-zinc-900' : 'text-zinc-100') : (theme === 'light' ? 'text-zinc-400 hover:text-zinc-600' : 'text-zinc-500 hover:text-zinc-300')}`}
             >
               Appearance
               {activeTab === 'appearance' && (
@@ -94,10 +103,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </button>
             <button
               onClick={() => setActiveTab('knowledge')}
-              className={`relative text-xl font-light tracking-wide transition-colors ${activeTab === 'knowledge' ? (theme === 'light' ? 'text-zinc-900' : 'text-zinc-100') : (theme === 'light' ? 'text-zinc-400 hover:text-zinc-600' : 'text-zinc-500 hover:text-zinc-300')}`}
+              className={`relative text-xl font-light tracking-wide theme-transition transition-colors ${activeTab === 'knowledge' ? (theme === 'light' ? 'text-zinc-900' : 'text-zinc-100') : (theme === 'light' ? 'text-zinc-400 hover:text-zinc-600' : 'text-zinc-500 hover:text-zinc-300')}`}
             >
               Knowledge
               {activeTab === 'knowledge' && (
+                <motion.div
+                  layoutId="activeTab"
+                  className="absolute -bottom-1 left-0 right-0 h-0.5 bg-[var(--accent-primary)]"
+                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                />
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('entities')}
+              className={`relative text-xl font-light tracking-wide theme-transition transition-colors ${activeTab === 'entities' ? (theme === 'light' ? 'text-zinc-900' : 'text-zinc-100') : (theme === 'light' ? 'text-zinc-400 hover:text-zinc-600' : 'text-zinc-500 hover:text-zinc-300')}`}
+            >
+              Entities
+              {activeTab === 'entities' && (
                 <motion.div
                   layoutId="activeTab"
                   className="absolute -bottom-1 left-0 right-0 h-0.5 bg-[var(--accent-primary)]"
@@ -186,11 +208,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 />
               </motion.div>
             )}
+
+            {activeTab === 'entities' && (
+              <motion.div
+                key="entities"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2 }}
+              >
+                <EntitySettings
+                  profileId={currentProfile.id}
+                />
+              </motion.div>
+            )}
           </AnimatePresence>
         </div>
 
         {/* Footer */}
-        <div className={`p-6 border-t ${theme === 'light' ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-900/50 border-zinc-800'}`}>
+        <div className={`p-6 border-t theme-transition ${theme === 'light' ? 'bg-zinc-50 border-zinc-200' : 'bg-zinc-900/50 border-zinc-800'}`}>
           <Button
             variant="primary"
             onClick={handleSave}

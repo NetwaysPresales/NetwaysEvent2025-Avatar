@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
-import { getProfileAssetUrl, uploadProfileAsset } from '@/lib/profile-service';
+import { getProfileAssetUrl, uploadProfileAsset, deleteProfileAsset } from '@/lib/profile-service';
 
 /**
  * GET /api/profiles/[id]/assets
@@ -31,7 +31,13 @@ export async function GET(
         // Generate SAS URL (profile service handles ownership verification)
         const sasUrl = await getProfileAssetUrl(session.userId, id, assetType, expiresInMinutes);
 
-        // Redirect to SAS URL
+        // Check if client wants JSON (for authenticated client-side fetching)
+        const acceptHeader = req.headers.get('accept');
+        if (acceptHeader?.includes('application/json')) {
+            return NextResponse.json({ url: sasUrl });
+        }
+
+        // Redirect to SAS URL (for direct browser access)
         return NextResponse.redirect(sasUrl);
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -126,5 +132,46 @@ export async function POST(
         }
         console.error('Asset Upload Error', error);
         return NextResponse.json({ error: 'Upload Failed' }, { status: 500 });
+    }
+}
+
+/**
+ * DELETE /api/profiles/[id]/assets
+ * Delete a profile asset (logo or background)
+ * 
+ * Query params:
+ * - assetType: 'logo' | 'background'
+ */
+export async function DELETE(
+    req: NextRequest,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    try {
+        const session = await requireAuth();
+        const { id } = await params;
+        const { searchParams } = new URL(req.url);
+        const assetType = searchParams.get('assetType') as 'logo' | 'background';
+
+        if (!assetType || (assetType !== 'logo' && assetType !== 'background')) {
+            return NextResponse.json(
+                { error: 'assetType parameter required (logo or background)' },
+                { status: 400 }
+            );
+        }
+
+        // Delete asset using profile service (handles ownership verification, blob deletion, and DB update)
+        await deleteProfileAsset(session.userId, id, assetType);
+
+        return NextResponse.json({ success: true });
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        if (errorMessage === 'Unauthorized') {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        if (errorMessage === 'Profile not found or unauthorized') {
+            return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
+        }
+        console.error('Asset Delete Error', error);
+        return NextResponse.json({ error: 'Delete Failed' }, { status: 500 });
     }
 }

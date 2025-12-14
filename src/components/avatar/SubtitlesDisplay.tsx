@@ -42,14 +42,18 @@ export const SubtitlesDisplay: React.FC<SubtitlesDisplayProps> = ({
   return (
     <div
       ref={containerRef}
-      className={`absolute bottom-24 left-0 right-0 z-40 max-h-32 overflow-y-auto px-4 sleek-scrollbar ${theme === 'light' ? 'bg-white/80' : 'bg-zinc-900/80'} backdrop-blur-md rounded-2xl mx-4 border ${theme === 'light' ? 'border-zinc-200' : 'border-zinc-800'} ${className}`}
+      className={`absolute top-20 left-1/2 -translate-x-1/2 z-50 max-w-3xl w-[calc(100%-2rem)] max-h-32 overflow-y-auto scrollbar-hide theme-transition ${theme === 'light' ? 'bg-white/80' : 'bg-zinc-900/80'} backdrop-blur-md rounded-2xl px-6 pt-4 pb-4 border ${theme === 'light' ? 'border-zinc-200' : 'border-zinc-800'} ${className}`}
+      style={{
+        scrollbarWidth: 'none',
+        msOverflowStyle: 'none',
+      }}
     >
-      <div className="p-4">
-        <ReactMarkdown remarkPlugins={[remarkGfm]} className="prose prose-sm max-w-none dark:prose-invert">
+      <div className="prose prose-sm max-w-none dark:prose-invert">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>
           {subtitle}
         </ReactMarkdown>
-        <div ref={endRef} />
       </div>
+      <div ref={endRef} />
     </div>
   );
 };

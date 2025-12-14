@@ -67,20 +67,13 @@ export const OpenAISettings: React.FC<OpenAISettingsProps> = ({
           placeholder="e.g., gpt-4"
         />
 
-        <div>
-          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
-            System Prompt
-          </label>
-          <div className={`group rounded-lg overflow-hidden border ${theme === 'light' ? 'border-zinc-300 bg-zinc-50 focus-within:ring-2 focus-within:ring-[var(--accent-focus-ring)] focus-within:border-[var(--accent-primary)]/50' : 'border-zinc-800 bg-zinc-950 focus-within:ring-2 focus-within:ring-[var(--accent-focus-ring)] focus-within:border-[var(--accent-primary)]/50'} transition-all`}>
-            <Textarea
-              value={config.systemPrompt || ''}
-              onChange={(e) => onChange({ ...config, systemPrompt: e.target.value })}
-              placeholder="Enter system prompt..."
-              rows={6}
-              className="border-0 focus:ring-0"
-            />
-          </div>
-        </div>
+        <Textarea
+          label="System Prompt"
+          value={config.systemPrompt || ''}
+          onChange={(e) => onChange({ ...config, systemPrompt: e.target.value })}
+          placeholder="Enter system prompt..."
+          rows={6}
+        />
       </div>
     </div>
   );

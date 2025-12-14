@@ -19,8 +19,7 @@ model User {
 
   profiles        Profile[]
   knowledgeFiles  KnowledgeFile[]
-  entityTemplates EntityTemplate[]
-  entityInstances EntityInstance[]
+  entities        Entity[]
   conversations   Conversation[]
   profileBackups  ProfileBackup[]
 
@@ -55,8 +54,7 @@ model Profile {
 
   user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   knowledgeFiles  KnowledgeFile[]
-  entityTemplates EntityTemplate[]
-  entityInstances EntityInstance[]
+  entities        Entity[]
   conversations   Conversation[]
   profileBackups  ProfileBackup[]
 
@@ -85,52 +83,30 @@ model KnowledgeFile {
   @@map("knowledge_files")
 }
 
-model EntityTemplate {
+model Entity {
   id          String   @id @default(uuid()) @db.Uuid
   userId      String   @map("user_id") @db.Uuid
   profileId   String   @map("profile_id") @db.Uuid
   name        String   @db.VarChar(255)
   description String?  @db.Text
-  structure   Json
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  profile         Profile          @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  entityInstances EntityInstance[]
-
-  @@unique([profileId, name], name: "unique_template_name_per_profile")
-  @@index([userId, profileId], name: "idx_entity_templates_user_profile")
-  @@map("entity_templates")
-}
-
-model EntityInstance {
-  id          String   @id @default(uuid()) @db.Uuid
-  userId      String   @map("user_id") @db.Uuid
-  profileId   String   @map("profile_id") @db.Uuid
-  templateId  String   @map("template_id") @db.Uuid
-  name        String   @db.VarChar(255)
-  identifier  String   @db.VarChar(255)
-  description String?  @db.Text
-  data        Json
+  structure   Json     // Field definitions: { layout: string, fields: [...] }
+  data        Json     // Entity data: { fieldId: value, ... }
   isActive    Boolean  @default(true) @map("is_active")
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   profile    Profile           @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  template   EntityTemplate    @relation(fields: [templateId], references: [id], onDelete: Cascade)
   mediaFiles EntityMediaFile[]
 
-  @@unique([profileId, identifier], name: "unique_identifier_per_profile")
-  @@index([userId, profileId], name: "idx_entity_instances_user_profile")
-  @@index([profileId, identifier], name: "idx_entity_instances_identifier")
-  @@map("entity_instances")
+  @@index([userId, profileId], name: "idx_entities_user_profile")
+  @@index([profileId, name], name: "idx_entities_profile_name")
+  @@map("entities")
 }
 
 model EntityMediaFile {
   id               String   @id @default(uuid()) @db.Uuid
-  entityInstanceId String   @map("entity_instance_id") @db.Uuid
+  entityId         String   @map("entity_id") @db.Uuid
   fieldId          String   @map("field_id") @db.VarChar(255)
   blobUrl          String   @map("blob_url") @db.VarChar(500)
   blobContainer    String   @default("entity-media") @map("blob_container") @db.VarChar(100)
@@ -146,9 +122,9 @@ model EntityMediaFile {
   orderIndex       Int      @default(0) @map("order_index")
   uploadedAt       DateTime @default(now()) @map("uploaded_at") @db.Timestamptz(6)
 
-  entityInstance EntityInstance @relation(fields: [entityInstanceId], references: [id], onDelete: Cascade)
+  entity Entity @relation(fields: [entityId], references: [id], onDelete: Cascade)
 
-  @@index([entityInstanceId], name: "idx_entity_media_files_entity_id")
+  @@index([entityId], name: "idx_entity_media_files_entity_id")
   @@map("entity_media_files")
 }
 

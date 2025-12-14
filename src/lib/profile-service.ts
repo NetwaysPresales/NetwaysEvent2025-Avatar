@@ -13,7 +13,8 @@
  */
 
 import { db, transaction } from './db';
-import { uploadAsset, deleteAsset, getAssetUrl, CONTAINERS } from './blob-storage';
+import { uploadAsset, deleteAsset, CONTAINERS } from './blob-storage';
+import { getMediaUrl } from './media-service';
 import { getDefaultAvatarConfig, getDefaultSpeechConfig, getDefaultAzureOpenAIConfig, getDefaultTTSConfig } from './config';
 import { PrismaClient } from '@prisma/client';
 
@@ -255,7 +256,7 @@ export async function uploadProfileAsset(
     });
 
     // Step 5: Generate SAS URL for immediate use
-    const sasUrl = await getAssetUrl(userId, profileId, assetType, 60);
+    const sasUrl = await getMediaUrl(userId, newBlobUrl, { expiresInMinutes: 60 });
 
     return {
       blobUrl: newBlobUrl,
@@ -352,7 +353,30 @@ export async function getProfileAssetUrl(
   assetType: 'logo' | 'background',
   expiresInMinutes: number = 60
 ): Promise<string> {
-  return await getAssetUrl(userId, profileId, assetType, expiresInMinutes);
+  // Get profile to retrieve blob URL
+  const profile = await db.profile.findFirst({
+    where: {
+      id: profileId,
+      userId: userId,
+    },
+    select: {
+      logoBlobUrl: true,
+      backgroundBlobUrl: true,
+    },
+  });
+
+  if (!profile) {
+    throw new Error('Profile not found or unauthorized');
+  }
+
+  const blobUrl = assetType === 'logo' ? profile.logoBlobUrl : profile.backgroundBlobUrl;
+  
+  if (!blobUrl) {
+    throw new Error(`Asset of type '${assetType}' not found for profile ${profileId}`);
+  }
+
+  // Use unified media service to generate SAS URL
+  return await getMediaUrl(userId, blobUrl, { expiresInMinutes, verifyOwnership: true });
 }
 
 /**

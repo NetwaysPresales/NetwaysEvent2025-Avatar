@@ -1,8 +1,8 @@
 import { createReactAgent } from '@langchain/langgraph/prebuilt';
 import { SystemMessage } from '@langchain/core/messages';
 import { TavilySearchResults } from '@langchain/community/tools/tavily_search';
-import { localRetrieverTool } from './tools/local';
-import { knowledgeBaseTool } from './tools/knowledge';
+import { createKnowledgeBaseTool } from './tools/knowledge';
+import { getEntityInfoTool, getEntityVisualizationTool } from './tools/entity-visualization';
 import { azureModelFromEnv } from './llm';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { StructuredToolInterface } from '@langchain/core/tools';
@@ -44,9 +44,32 @@ interface AgentInterface {
   invoke(params: AgentInvokeParams): Promise<AgentInvokeResult>;
 }
 
-export function buildAgent(systemPromptOverride?: string): AgentInterface {
+export interface BuildAgentConfig {
+  systemPrompt?: string;
+  userId?: string;
+  profileId?: string;
+}
+
+export function buildAgent(config?: BuildAgentConfig | string): AgentInterface {
+  // Backward compatibility: if string is passed, treat as systemPrompt
+  const systemPromptOverride = typeof config === 'string' ? config : config?.systemPrompt;
+  const userId = typeof config === 'object' ? config?.userId : undefined;
+  const profileId = typeof config === 'object' ? config?.profileId : undefined;
+
   const llm = azureModelFromEnv();
-  const tools: StructuredToolInterface[] = [localRetrieverTool(), knowledgeBaseTool];
+  const tools: StructuredToolInterface[] = [];
+  
+  // Add knowledge base tool if user/profile context is provided
+  if (userId && profileId) {
+    tools.push(createKnowledgeBaseTool(userId, profileId));
+  }
+  
+  // Add entity tools if user/profile context is provided
+  if (userId && profileId) {
+    tools.push(getEntityInfoTool(userId, profileId));
+    tools.push(getEntityVisualizationTool(userId, profileId));
+  }
+  
   if (process.env.TAVILY_API_KEY) {
     tools.push(new TavilySearchResults({ apiKey: process.env.TAVILY_API_KEY, maxResults: 3 }));
   }
@@ -55,8 +78,7 @@ export function buildAgent(systemPromptOverride?: string): AgentInterface {
     return {
       async invoke({ messages }: AgentInvokeParams): Promise<AgentInvokeResult> {
         const last = messages[messages.length - 1]?.content || '';
-        const local = await tools[0].invoke(last);
-        return { messages: [{ content: String(local) }] };
+        return { messages: [{ content: 'LLM not configured. Please check your environment variables.' }] };
       }
     };
   }

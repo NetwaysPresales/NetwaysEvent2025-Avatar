@@ -96,8 +96,13 @@ export function useSpeechRecognition({
       }
 
       // Setup auto-detect languages
+      // Ensure locales array is valid and not empty
+      const locales = Array.isArray(sttConfig.locales) && sttConfig.locales.length > 0
+        ? sttConfig.locales
+        : ['en-US']; // Default fallback
+      
       const autoDetectConfig = SpeechSDK.AutoDetectSourceLanguageConfig.fromLanguages(
-        sttConfig.locales
+        locales
       );
 
       // Create audio config from default microphone

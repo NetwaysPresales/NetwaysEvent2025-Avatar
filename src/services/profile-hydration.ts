@@ -66,9 +66,11 @@ export function hydrateProfile(profile: Profile): HydratedProfile {
     deploymentName: (profile.openaiConfig as any)?.deploymentName || defaultOpenAI.deploymentName,
   } as AzureOpenAIConfig;
 
-  // STT config (default empty for now)
-  const sttConfig = (profile.sttConfig as STTConfig) || {
-    enabled: false,
+  // STT config with proper defaults
+  const sttConfig: STTConfig = {
+    locales: ['en-US', 'ar-AE'], // Default locales
+    continuousConversation: true,
+    ...(profile.sttConfig as Partial<STTConfig>),
   };
 
   // Build asset URLs (use API endpoint which redirects to SAS URL)

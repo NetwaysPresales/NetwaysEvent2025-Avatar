@@ -17,11 +17,9 @@ import { useAvatarVideo } from '@/hooks/useAvatarVideo';
 import { useAvatarAudio } from '@/hooks/useAvatarAudio';
 import { validateSpeechConfig, validateAzureOpenAIConfig } from '@/lib/config';
 import { cleanTextForTTS } from '@/lib/text-processing';
-import { EntityInfoCards } from '@/components/EntityInfoCards';
+import { EntityVisualization } from '@/components/entity';
 import { AvatarBackground } from '@/components/AvatarBackground';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
-import { SettingsModal } from '@/components/settings';
-import { PageHeader } from '@/components/navigation';
 import { VoiceInput, SubtitlesDisplay, AvatarRenderer } from '@/components/avatar';
 
 const RECONNECT_TIMEOUT_MS = 3600000;
@@ -56,11 +54,10 @@ export const AvatarPage: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [avatarSessionStarted, setAvatarSessionStarted] = useState(false);
   const [isAvatarReady, setIsAvatarReady] = useState(false);
-  const [showCompanyInfo, setShowCompanyInfo] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [showEntityVisualization, setShowEntityVisualization] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
 
-  const currentEntityRef = useRef<any>(null);
-  const isSpeakingAboutCompanyRef = useRef(false);
+  const currentEntityVisualizationRef = useRef<typeof currentEntityVisualization>(null);
 
   // Audio management
   const { setupAudioElement, unmute, isMuted } = useAvatarAudio({
@@ -77,13 +74,17 @@ export const AvatarPage: React.FC = () => {
   });
 
   // Agent
-  const { sendMessage, currentEntity, updateEntityState } = useAgent({ openAIConfig: openaiConfig });
+  const { sendMessage, currentEntityVisualization, updateEntityVisualization } = useAgent({ 
+    openAIConfig: openaiConfig,
+    profileId: currentProfile?.id || ''
+  });
 
   // Avatar session
   const {
     state: avatarState,
     error: avatarError,
     startSession,
+    stopSession,
     speak,
     touch,
   } = useAvatarSession({
@@ -94,18 +95,14 @@ export const AvatarPage: React.FC = () => {
     onVideoTrack: setupVideoElement,
     onAudioTrack: setupAudioElement,
     onEvent: (event) => {
-      if (event.event.eventType === 'EVENT_TYPE_TURN_START') {
-        if (isSpeakingAboutCompanyRef.current && currentEntityRef.current) {
-          setTimeout(() => setShowCompanyInfo(true), COMPANY_INFO_SHOW_DELAY_MS);
-        }
-      } else if (
+      if (
         event.event.eventType === 'EVENT_TYPE_SESSION_END' ||
         event.event.eventType === 'EVENT_TYPE_SWITCH_TO_IDLE'
       ) {
         setCurrentSubtitle('');
         setTimeout(() => {
-          setShowCompanyInfo(false);
-          updateEntityState(null, false);
+          setShowEntityVisualization(false);
+          updateEntityVisualization(null, false);
         }, COMPANY_INFO_HIDE_DELAY_MS);
       }
     },
@@ -137,8 +134,19 @@ export const AvatarPage: React.FC = () => {
     setErrorMessage(null);
     setAvatarSessionStarted(true);
     setIsAvatarReady(false);
+    
+    // Preload knowledge files in background before starting session
+    if (currentProfile?.id) {
+      fetch(`/api/profiles/${currentProfile.id}/knowledge/preload`, {
+        method: 'POST',
+      }).catch((err) => {
+        console.error('[AvatarPage] Failed to preload knowledge files:', err);
+        // Don't block session start if preload fails
+      });
+    }
+    
     await startSession();
-  }, [speechConfig, openaiConfig, startSession]);
+  }, [speechConfig, openaiConfig, startSession, currentProfile?.id]);
 
   const hasStartedRef = useRef(false);
   useEffect(() => {
@@ -165,13 +173,17 @@ export const AvatarPage: React.FC = () => {
   }, [isConnected]);
 
   useEffect(() => {
-    if (currentEntity) {
-      currentEntityRef.current = currentEntity;
-      isSpeakingAboutCompanyRef.current = true;
+    if (currentEntityVisualization) {
+      currentEntityVisualizationRef.current = currentEntityVisualization;
+      // Show visualization immediately when available (same time as subtitle)
+      if (currentEntityVisualization.visualize) {
+        setShowEntityVisualization(true);
+      }
     } else {
-      isSpeakingAboutCompanyRef.current = false;
+      currentEntityVisualizationRef.current = null;
+      setShowEntityVisualization(false);
     }
-  }, [currentEntity]);
+  }, [currentEntityVisualization]);
 
   useEffect(() => {
     if (avatarError) {
@@ -179,29 +191,59 @@ export const AvatarPage: React.FC = () => {
     }
   }, [avatarError]);
 
+  const handleHomeClick = useCallback(async () => {
+    setIsClosing(true);
+    try {
+      // Stop the avatar session and clean up resources
+      if (stopSession) {
+        stopSession();
+      }
+      // Small delay to ensure cleanup completes and show loading state
+      await new Promise(resolve => setTimeout(resolve, 500));
+    } catch (error) {
+      console.error('Error closing avatar session:', error);
+    } finally {
+      router.push('/');
+    }
+  }, [stopSession, router]);
+
   return (
-    <main className={`relative h-screen w-full overflow-hidden ${theme === 'light' ? 'bg-zinc-50' : 'bg-black'}`}>
+    <main className={`fixed inset-0 h-screen w-full overflow-hidden theme-transition ${theme === 'light' ? 'bg-zinc-50' : 'bg-black'}`}>
       <AvatarBackground backgroundUrl={hydrated.appearance.backgroundUrl} />
 
       <AvatarRenderer avatarConfig={avatarConfig} />
 
       <LoadingOverlay
-        isVisible={isConnecting || !isAvatarReady}
-        message={isConnecting ? 'Connecting to avatar...' : 'Initializing...'}
+        isVisible={isConnecting || !isAvatarReady || isClosing}
+        message={isClosing ? 'Closing avatar session...' : isConnecting ? 'Connecting to avatar...' : 'Initializing...'}
+        isClosing={isClosing}
       />
 
-      {isAvatarReady && (
+      {isAvatarReady && !isClosing && (
         <>
-          <PageHeader
-            onSettingsClick={() => setIsSettingsOpen(true)}
-            showHomeButton={true}
-          />
+          <button
+            onClick={handleHomeClick}
+            className={`absolute top-4 right-4 z-50 flex items-center gap-2 px-4 py-2 rounded-full theme-transition ${
+              theme === 'light' ? 'bg-white/90 text-zinc-900' : 'bg-zinc-900/90 text-zinc-100'
+            } backdrop-blur-md shadow-lg border ${
+              theme === 'light' ? 'border-zinc-200' : 'border-zinc-800'
+            } hover:shadow-xl transition-all duration-200`}
+            title="End Session"
+          >
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+              <rect x="6" y="6" width="12" height="12" rx="2" />
+            </svg>
+            <span className="text-sm font-medium">End Session</span>
+          </button>
 
           <SubtitlesDisplay subtitle={currentSubtitle} />
 
           <AnimatePresence>
-            {currentEntity && showCompanyInfo && (
-              <EntityInfoCards entity={currentEntity} isVisible={true} />
+            {currentEntityVisualization?.visualizationData && showEntityVisualization && (
+              <EntityVisualization
+                data={currentEntityVisualization.visualizationData}
+                isVisible={showEntityVisualization}
+              />
             )}
           </AnimatePresence>
 
@@ -217,7 +259,7 @@ export const AvatarPage: React.FC = () => {
             <div className="absolute top-20 right-4 z-50">
               <button
                 onClick={unmute}
-                className={`px-4 py-2 rounded-full ${
+                className={`px-4 py-2 rounded-full theme-transition ${
                   theme === 'light' ? 'bg-white/90 text-zinc-900' : 'bg-zinc-900/90 text-white'
                 } backdrop-blur-md border ${theme === 'light' ? 'border-zinc-200' : 'border-zinc-800'} shadow-lg`}
               >
@@ -229,7 +271,7 @@ export const AvatarPage: React.FC = () => {
           {errorMessage && (
             <div className="absolute top-20 left-4 z-50 max-w-md">
               <div
-                className={`p-4 rounded-lg ${
+                className={`p-4 rounded-lg theme-transition ${
                   theme === 'light'
                     ? 'bg-red-50 border-red-200 text-red-800'
                     : 'bg-red-900/50 border-red-800 text-red-200'
@@ -241,8 +283,6 @@ export const AvatarPage: React.FC = () => {
           )}
         </>
       )}
-
-      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
     </main>
   );
 };

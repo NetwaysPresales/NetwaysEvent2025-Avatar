@@ -27,6 +27,7 @@ interface ProfileContextType {
   // State
   profileState: ProfileState;
   profiles: Profile[];
+  isLoadingProfiles: boolean;
   
   // Actions
   loadProfile: (id: string) => Promise<void>;
@@ -53,6 +54,7 @@ interface ProfileContextType {
   setLogoUrl: (url: string | null) => void;
   setBackgroundUrl: (url: string | null) => void;
   setTheme: (theme: 'light' | 'dark') => void;
+  toggleTheme: () => void;
   setAccentColor: (color: AccentColor | null) => void;
   
   // UI state
@@ -67,6 +69,7 @@ const ProfileContext = createContext<ProfileContextType | undefined>(undefined);
 export const ProfileProvider = ({ children }: { children: ReactNode }) => {
   const [profileState, setProfileState] = useState<ProfileState>({ type: 'idle' });
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [isLoadingProfiles, setIsLoadingProfiles] = useState(true);
   const [showSpeechApiKey, setShowSpeechApiKey] = useState(false);
   const [showOpenAIApiKey, setShowOpenAIApiKey] = useState(false);
   
@@ -95,6 +98,7 @@ export const ProfileProvider = ({ children }: { children: ReactNode }) => {
 
   // Refresh profiles list
   const refreshProfiles = useCallback(async (): Promise<Profile[]> => {
+    setIsLoadingProfiles(true);
     try {
       const res = await fetch('/api/profiles', { cache: 'no-store' });
       const data = await res.json();
@@ -106,6 +110,8 @@ export const ProfileProvider = ({ children }: { children: ReactNode }) => {
     } catch (error) {
       console.error('Failed to refresh profiles', error);
       return [];
+    } finally {
+      setIsLoadingProfiles(false);
     }
   }, []);
 
@@ -145,6 +151,16 @@ export const ProfileProvider = ({ children }: { children: ReactNode }) => {
         if (typeof window !== 'undefined') {
           window.localStorage.setItem('lastProfileId', id);
         }
+
+        // Preload knowledge files and entities in the background (don't block)
+        // Import dynamically to avoid SSR issues
+        Promise.all([
+          import('@/hooks/useKnowledgeCache').then(m => m.preloadKnowledgeFiles(id)),
+          import('@/hooks/useEntityCache').then(m => m.preloadEntities(id)),
+        ]).catch((err) => {
+          console.error('[ProfileContext] Failed to preload knowledge/entities:', err);
+          // Don't block profile loading if preload fails
+        });
       } else {
         throw new Error('Profile not found');
       }
@@ -447,6 +463,30 @@ export const ProfileProvider = ({ children }: { children: ReactNode }) => {
     });
   }, []);
 
+  const toggleTheme = useCallback(() => {
+    setProfileState((prevState) => {
+      if (prevState.type === 'loaded') {
+        const newTheme = prevState.hydrated.appearance.theme === 'light' ? 'dark' : 'light';
+        // Immediately apply theme for instant feedback
+        applyTheme(newTheme);
+        const palette = generateAccentPalette(prevState.hydrated.appearance.accentColor);
+        applyAccentColor(palette);
+        
+        return {
+          ...prevState,
+          hydrated: {
+            ...prevState.hydrated,
+            appearance: {
+              ...prevState.hydrated.appearance,
+              theme: newTheme,
+            },
+          },
+        };
+      }
+      return prevState;
+    });
+  }, []);
+
   const setAccentColor = useCallback((color: AccentColor | null) => {
     setProfileState((prevState) => {
       if (prevState.type === 'loaded') {
@@ -465,23 +505,27 @@ export const ProfileProvider = ({ children }: { children: ReactNode }) => {
     });
   }, []);
 
-  // Initial load
+  // Initial load - immediately select first profile or last selected
   useEffect(() => {
     let mounted = true;
     
-    refreshProfiles().then(async (refreshedProfiles) => {
-      if (!mounted) return;
+    (async () => {
+      const refreshedProfiles = await refreshProfiles();
+      if (!mounted || refreshedProfiles.length === 0) return;
       
       if (typeof window !== 'undefined') {
         const lastId = window.localStorage.getItem('lastProfileId');
-        if (lastId && refreshedProfiles.some(p => p.id === lastId)) {
-          await loadProfile(lastId);
-        } else if (refreshedProfiles.length > 0) {
-          // If no last profile but profiles exist, load the first one
-          await loadProfile(refreshedProfiles[0].id);
-        }
+        const profileToLoad = lastId && refreshedProfiles.some(p => p.id === lastId)
+          ? lastId
+          : refreshedProfiles[0].id;
+        
+        // Set loading state immediately for better UX
+        setProfileState({ type: 'loading', profileId: profileToLoad });
+        
+        // Load immediately without delay
+        await loadProfile(profileToLoad);
       }
-    });
+    })();
 
     return () => {
       mounted = false;
@@ -503,6 +547,7 @@ export const ProfileProvider = ({ children }: { children: ReactNode }) => {
       value={{
         profileState,
         profiles,
+        isLoadingProfiles,
         loadProfile,
         refreshProfiles,
         saveProfile,
@@ -521,6 +566,7 @@ export const ProfileProvider = ({ children }: { children: ReactNode }) => {
         setLogoUrl,
         setBackgroundUrl,
         setTheme,
+        toggleTheme,
         setAccentColor,
         showSpeechApiKey,
         setShowSpeechApiKey,

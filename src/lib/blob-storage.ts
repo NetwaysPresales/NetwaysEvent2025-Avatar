@@ -288,3 +288,32 @@ export function extractContainerName(blobUrl: string): ContainerName {
   return pathParts[0] as ContainerName;
 }
 
+/**
+ * Download blob content as text
+ * 
+ * @param blobUrl - Full blob URL
+ * @returns Blob content as string
+ */
+export async function downloadBlobAsText(blobUrl: string): Promise<string> {
+  const url = new URL(blobUrl);
+  const pathParts = url.pathname.split('/').filter(Boolean);
+  
+  const containerName = pathParts[0] as ContainerName;
+  const blobName = pathParts.slice(1).join('/');
+
+  const containerClient = await getContainerClient(containerName);
+  const blockBlobClient = containerClient.getBlockBlobClient(blobName);
+  
+  const downloadResponse = await blockBlobClient.download();
+  if (!downloadResponse.readableStreamBody) {
+    throw new Error('Blob download failed: no stream body');
+  }
+  
+  const chunks: Buffer[] = [];
+  for await (const chunk of downloadResponse.readableStreamBody) {
+    chunks.push(Buffer.from(chunk));
+  }
+  
+  return Buffer.concat(chunks).toString('utf-8');
+}
+
