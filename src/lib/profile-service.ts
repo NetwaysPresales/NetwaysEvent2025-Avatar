@@ -31,6 +31,7 @@ export interface CreateProfileInput {
   appDescription?: string;
   theme?: 'light' | 'dark';
   accentColor?: { r: number; g: number; b: number };
+  logoShowContainer?: boolean;
 }
 
 export interface UpdateProfileInput {
@@ -44,6 +45,7 @@ export interface UpdateProfileInput {
   appDescription?: string;
   theme?: 'light' | 'dark';
   accentColor?: { r: number; g: number; b: number };
+  logoShowContainer?: boolean;
 }
 
 export interface UploadAssetResult {
@@ -83,6 +85,7 @@ export async function createProfile(input: CreateProfileInput) {
       appDescription: input.appDescription || 'Your AI-powered virtual assistant.',
       theme: input.theme || 'light',
       accentColor: input.accentColor || { r: 16, g: 185, b: 129 }, // emerald-500
+      logoShowContainer: input.logoShowContainer ?? true,
     },
   });
 
@@ -168,6 +171,7 @@ export async function updateProfile(
       ...(updates.appDescription !== undefined && { appDescription: updates.appDescription }),
       ...(updates.theme !== undefined && { theme: updates.theme }),
       ...(updates.accentColor !== undefined && { accentColor: updates.accentColor }),
+      ...(updates.logoShowContainer !== undefined && { logoShowContainer: updates.logoShowContainer }),
     },
   });
 
@@ -257,6 +261,8 @@ export async function uploadProfileAsset(
     });
 
     // Step 5: Generate SAS URL for immediate use
+    // Add a small delay to ensure blob is fully committed before generating SAS URL
+    await new Promise(resolve => setTimeout(resolve, 500));
     const sasUrl = await getMediaUrl(userId, newBlobUrl, { expiresInMinutes: 60 });
 
     return {

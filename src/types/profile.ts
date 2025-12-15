@@ -23,6 +23,7 @@ export interface Profile {
   appDescription: string | null;
   theme: 'light' | 'dark';
   accentColor: AccentColor | null;
+  logoShowContainer: boolean;
 
   // Asset references (Blob Storage URLs)
   logoBlobUrl: string | null;

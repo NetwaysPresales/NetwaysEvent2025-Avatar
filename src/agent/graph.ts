@@ -7,7 +7,11 @@ import { azureModelFromEnv } from './llm';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { StructuredToolInterface } from '@langchain/core/tools';
 
-export const systemPrompt = `You are a helpful AI assistant.
+/**
+ * Default system prompt (fallback only - should always use profile's systemPrompt from database)
+ * @deprecated Use profile.openaiConfig.systemPrompt from database instead
+ */
+export const defaultSystemPrompt = `You are a helpful AI assistant.
 
 YOUR ROLE:
 - You are a knowledgeable, friendly, and professional voice assistant.
@@ -79,9 +83,13 @@ export function buildAgent(config?: BuildAgentConfig | string): AgentInterface {
     };
   }
 
+  // systemPromptOverride should always be provided from database (via API route)
+  // This fallback should never be hit in production
+  const finalSystemPrompt = systemPromptOverride || defaultSystemPrompt;
+  
   return createReactAgent({
     llm: llm as BaseChatModel,
     tools,
-    messageModifier: new SystemMessage(systemPromptOverride || systemPrompt)
+    messageModifier: new SystemMessage(finalSystemPrompt)
   }) as AgentInterface;
 }

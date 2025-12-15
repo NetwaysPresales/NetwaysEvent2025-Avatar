@@ -124,6 +124,28 @@ export const ProfileList: React.FC<ProfileListProps> = ({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
+                    // TODO: Implement embed functionality
+                    alert('Embed functionality coming soon! This will generate embedding code for your avatar.');
+                  }}
+                  className={`p-2 rounded-full transition-colors cursor-pointer ${
+                    theme === 'light'
+                      ? 'text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100'
+                      : 'text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800'
+                  }`}
+                  title="Embed Avatar"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+                    />
+                  </svg>
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
                     onSettingsClick(p);
                   }}
                   className={`p-2 rounded-full transition-colors cursor-pointer ${

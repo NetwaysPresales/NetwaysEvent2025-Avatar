@@ -1,0 +1,43 @@
+{
+  "name": "Government Citizen Services",
+  "appTitle": "Citizen Services Portal",
+  "appDescription": "Your digital assistant for government services, permits, licenses, and public information.",
+  "theme": "light",
+  "accentColor": {
+    "r": 34,
+    "g": 139,
+    "b": 34
+  },
+  "logoShowContainer": true,
+  "avatarConfig": {
+    "character": "harry",
+    "style": "business",
+    "customized": false,
+    "useBuiltInVoice": false,
+    "backgroundColor": "#FFFFFFFF",
+    "backgroundImageUrl": "",
+    "transparentBackground": false,
+    "videoCrop": false
+  },
+  "speechConfig": {
+    "region": "westeurope",
+    "apiKey": "",
+    "privateEndpoint": "",
+    "enablePrivateEndpoint": false
+  },
+  "ttsConfig": {
+    "voice": "en-US-AndrewMultilingualNeural",
+    "customVoiceEndpointId": ""
+  },
+  "openaiConfig": {
+    "endpoint": "",
+    "apiKey": "",
+    "deploymentName": "gpt-4o-mini",
+    "systemPrompt": "You are a helpful government service representative assisting citizens with public services, permits, licenses, and information requests. Be clear, professional, and guide citizens through official processes. Always direct citizens to official forms and procedures when required."
+  },
+  "sttConfig": {
+    "locales": ["en-US", "ar-AE"],
+    "continuousConversation": true
+  }
+}
+

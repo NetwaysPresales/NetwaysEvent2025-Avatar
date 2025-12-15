@@ -13,6 +13,24 @@ import { db } from '@/lib/db';
 import { clearCachedEntities } from '@/lib/server-cache';
 import { Prisma } from '@prisma/client';
 
+// Helper to convert BigInt values (e.g., media file sizes) to numbers for JSON serialization
+function convertBigIntToNumber<T>(value: T): T {
+  if (typeof value === 'bigint') {
+    return Number(value) as unknown as T;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => convertBigIntToNumber(item)) as unknown as T;
+  }
+  if (value && typeof value === 'object') {
+    const result: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+      result[key] = convertBigIntToNumber(val);
+    }
+    return result as unknown as T;
+  }
+  return value;
+}
+
 /**
  * GET /api/profiles/[id]/entities/[entityId]
  * Get a specific entity
@@ -31,12 +49,11 @@ export async function GET(
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
-    const entity = await db.entity.findFirst({
+    const entity = await db.entity.findUnique({
       where: {
         id: entityId,
-        userId: session.userId,
-        profileId: profileId,
       },
+      // Verify ownership after fetching
       include: {
         mediaFiles: {
           orderBy: [
@@ -51,7 +68,15 @@ export async function GET(
       return NextResponse.json({ error: 'Entity not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ entity });
+    // Verify ownership
+    if (entity.userId !== session.userId || entity.profileId !== profileId) {
+      return NextResponse.json({ error: 'Entity not found' }, { status: 404 });
+    }
+
+    // Convert any BigInt fields (e.g., media file sizes) to numbers for JSON serialization
+    const safeEntity = convertBigIntToNumber(entity);
+
+    return NextResponse.json({ entity: safeEntity });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     if (errorMessage === 'Unauthorized') {
@@ -87,15 +112,18 @@ export async function PUT(
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
-    const existingEntity = await db.entity.findFirst({
+    const existingEntity = await db.entity.findUnique({
       where: {
         id: entityId,
-        userId: session.userId,
-        profileId: profileId,
       },
     });
 
     if (!existingEntity) {
+      return NextResponse.json({ error: 'Entity not found' }, { status: 404 });
+    }
+
+    // Verify ownership
+    if (existingEntity.userId !== session.userId || existingEntity.profileId !== profileId) {
       return NextResponse.json({ error: 'Entity not found' }, { status: 404 });
     }
 
@@ -122,7 +150,9 @@ export async function PUT(
     // Invalidate cache when entity is updated
     clearCachedEntities(session.userId, profileId);
 
-    return NextResponse.json({ entity: updatedEntity });
+    const safeUpdatedEntity = convertBigIntToNumber(updatedEntity);
+
+    return NextResponse.json({ entity: safeUpdatedEntity });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     if (errorMessage === 'Unauthorized') {
@@ -151,11 +181,9 @@ export async function DELETE(
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
-    const existingEntity = await db.entity.findFirst({
+    const existingEntity = await db.entity.findUnique({
       where: {
         id: entityId,
-        userId: session.userId,
-        profileId: profileId,
       },
       include: {
         mediaFiles: true,
@@ -163,6 +191,11 @@ export async function DELETE(
     });
 
     if (!existingEntity) {
+      return NextResponse.json({ error: 'Entity not found' }, { status: 404 });
+    }
+
+    // Verify ownership
+    if (existingEntity.userId !== session.userId || existingEntity.profileId !== profileId) {
       return NextResponse.json({ error: 'Entity not found' }, { status: 404 });
     }
 

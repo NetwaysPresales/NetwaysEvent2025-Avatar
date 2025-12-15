@@ -16,6 +16,39 @@ import type {
 } from '@/types/entity-visualization';
 
 /**
+ * Retry a database query with exponential backoff on connection timeouts
+ */
+async function retryQuery<T>(
+  queryFn: () => Promise<T>,
+  maxRetries: number = 3
+): Promise<T> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await queryFn();
+    } catch (error) {
+      lastError = error as Error;
+      const isTimeout = error instanceof Error && (
+        error.message.includes('timeout') ||
+        error.message.includes('Connection terminated') ||
+        error.message.includes('connection')
+      );
+      
+      if (isTimeout && attempt < maxRetries - 1) {
+        // Exponential backoff: 100ms, 200ms, 400ms
+        const delay = Math.pow(2, attempt) * 100;
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      throw error; // Not a timeout or out of retries, throw immediately
+    }
+  }
+  
+  throw lastError || new Error('Query failed after retries');
+}
+
+/**
  * Parse UUID from tool input
  */
 function parseEntityUuid(input: string): string | null {
@@ -163,32 +196,35 @@ export function getEntityInfoTool(
         }
 
         // Query entity with user/profile filter (CRITICAL for security)
-        const entity = await db.entity.findFirst({
-          where: {
-            id: entityUuid,
-            profileId,
-            userId,
-            isActive: true,
-          },
-          include: {
-            mediaFiles: {
-              orderBy: [
-                { fieldId: 'asc' },
-                { orderIndex: 'asc' },
-              ],
-              select: {
-                id: true,
-                fieldId: true,
-                blobUrl: true,
-                fileType: true,
-                mimeType: true,
-                altText: true,
-                caption: true,
-                orderIndex: true,
+        // Use retry logic for connection timeouts
+        const entity = await retryQuery(() =>
+          db.entity.findFirst({
+            where: {
+              id: entityUuid,
+              profileId,
+              userId,
+              isActive: true,
+            },
+            include: {
+              mediaFiles: {
+                orderBy: [
+                  { fieldId: 'asc' },
+                  { orderIndex: 'asc' },
+                ],
+                select: {
+                  id: true,
+                  fieldId: true,
+                  blobUrl: true,
+                  fileType: true,
+                  mimeType: true,
+                  altText: true,
+                  caption: true,
+                  orderIndex: true,
+                },
               },
             },
-          },
-        });
+          })
+        );
 
         if (!entity) {
           return JSON.stringify({
@@ -274,32 +310,35 @@ export function getEntityVisualizationTool(
         }
 
         // Query entity with user/profile filter (CRITICAL for security)
-        const entity = await db.entity.findFirst({
-          where: {
-            id: entityUuid,
-            profileId,
-            userId,
-            isActive: true,
-          },
-          include: {
-            mediaFiles: {
-              orderBy: [
-                { fieldId: 'asc' },
-                { orderIndex: 'asc' },
-              ],
-              select: {
-                id: true,
-                fieldId: true,
-                blobUrl: true,
-                fileType: true,
-                mimeType: true,
-                altText: true,
-                caption: true,
-                orderIndex: true,
+        // Use retry logic for connection timeouts
+        const entity = await retryQuery(() =>
+          db.entity.findFirst({
+            where: {
+              id: entityUuid,
+              profileId,
+              userId,
+              isActive: true,
+            },
+            include: {
+              mediaFiles: {
+                orderBy: [
+                  { fieldId: 'asc' },
+                  { orderIndex: 'asc' },
+                ],
+                select: {
+                  id: true,
+                  fieldId: true,
+                  blobUrl: true,
+                  fileType: true,
+                  mimeType: true,
+                  altText: true,
+                  caption: true,
+                  orderIndex: true,
+                },
               },
             },
-          },
-        });
+          })
+        );
 
         if (!entity) {
           return JSON.stringify({

@@ -7,6 +7,7 @@ import { useMediaUrl } from '@/hooks/useMediaUrl';
 
 type Props = {
     backgroundUrl?: string | null;
+    backgroundBlobUrl?: string | null; // Original blob URL for video detection
 };
 
 /**
@@ -18,7 +19,7 @@ function isBlobUrl(url: string | null): boolean {
   return url.includes('.blob.core.windows.net') && !url.includes('?sig=');
 }
 
-export const AvatarBackground = ({ backgroundUrl }: Props) => {
+export const AvatarBackground = ({ backgroundUrl, backgroundBlobUrl }: Props) => {
     const theme = useTheme();
     const videoRef = useRef<HTMLVideoElement>(null);
     
@@ -52,7 +53,10 @@ export const AvatarBackground = ({ backgroundUrl }: Props) => {
         );
     }
 
-    const isVideo = src.match(/\.(mp4|webm)$/i);
+    // Check if it's a video by file extension
+    // Check the blob URL first (most reliable), then the final src URL
+    const isVideo = (backgroundBlobUrl && backgroundBlobUrl.match(/\.(mp4|webm)$/i)) ||
+                    src.match(/\.(mp4|webm)$/i);
 
     return (
         <div className="absolute inset-0 pointer-events-none overflow-hidden">

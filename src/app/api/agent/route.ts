@@ -10,6 +10,7 @@ import {
 import { HumanMessage, AIMessage, ToolMessage } from '@langchain/core/messages';
 import { buildAgent } from '@/agent/graph';
 import type { EntityVisualizationResponse } from '@/types/entity-visualization';
+import type { AzureOpenAIConfig } from '@/types/avatar';
 
 /**
  * POST /api/agent
@@ -66,9 +67,16 @@ export async function POST(req: NextRequest) {
       session.userId
     );
 
-    // Build agent (using profile's system prompt if available, otherwise provided one)
-    const openAIConfig = profile.openaiConfig as { systemPrompt?: string } | null;
+    // Build agent (always use profile's system prompt from database, fallback to request or default)
+    const openAIConfig = profile.openaiConfig as AzureOpenAIConfig | null;
+    // Priority: 1) Request body systemPrompt (if provided), 2) Database systemPrompt, 3) Default from config
     let baseSystemPrompt = systemPrompt || openAIConfig?.systemPrompt || '';
+    
+    // If still empty, use default from config (shouldn't happen, but safety fallback)
+    if (!baseSystemPrompt) {
+      const { getDefaultAzureOpenAIConfig } = await import('@/lib/config');
+      baseSystemPrompt = getDefaultAzureOpenAIConfig().systemPrompt;
+    }
     
     // HACK: Inject knowledge files from cache into system prompt
     // TODO: Replace with Azure AI Search integration when ready
@@ -126,35 +134,57 @@ export async function POST(req: NextRequest) {
       result = { messages: [] };
     }
 
-    // Check if get_entity tool was called with visualize=true
+    // Check for visualize_entity tool calls
+    // CRITICAL FIX: ToolMessage doesn't have a 'name' property
+    // Need to find AIMessage with tool_calls, then match ToolMessage by tool_call_id
     let entityVisualization: EntityVisualizationResponse | null = null;
 
-    // Search through all messages to find visualize_entity tool calls
+    // Search through messages to find visualize_entity tool calls
     // Process in reverse to get the most recent visualization
     for (let i = result.messages.length - 1; i >= 0; i--) {
       const msg = result.messages[i];
-      if (msg instanceof ToolMessage && msg.name === 'visualize_entity') {
-        try {
-          const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
-          const parsed = JSON.parse(content);
-          // If visualize_entity was called, it always visualizes (that's what it does!)
-          if (parsed.found === true && parsed.entityId) {
-            // Validate the structure matches our expected format
-            if (parsed.visualizationData && parsed.entityName && parsed.agentContext) {
-              entityVisualization = {
-                entityId: parsed.entityId,
-                entityName: parsed.entityName,
-                visualizationData: parsed.visualizationData,
-                agentContext: parsed.agentContext,
-                visualize: true,
-              };
-              // Use the most recent visualization found
-              break;
+      
+      // Find AIMessage with tool calls for 'visualize_entity'
+      if (msg instanceof AIMessage && msg.tool_calls && msg.tool_calls.length > 0) {
+        for (const toolCall of msg.tool_calls) {
+          if (toolCall.name === 'visualize_entity') {
+            // Find corresponding ToolMessage by tool_call_id
+            const toolMessage = result.messages.find(
+              (m): m is ToolMessage => 
+                m instanceof ToolMessage && m.tool_call_id === toolCall.id
+            );
+            
+            if (toolMessage) {
+              try {
+                const content = typeof toolMessage.content === 'string' 
+                  ? toolMessage.content 
+                  : JSON.stringify(toolMessage.content);
+                const parsed = JSON.parse(content);
+                
+                // If visualize_entity was called, it always visualizes
+                if (parsed.found === true && parsed.entityId) {
+                  // Validate the structure matches our expected format
+                  if (parsed.visualizationData && parsed.entityName && parsed.agentContext) {
+                    entityVisualization = {
+                      entityId: parsed.entityId,
+                      entityName: parsed.entityName,
+                      visualizationData: parsed.visualizationData,
+                      agentContext: parsed.agentContext,
+                      visualize: true,
+                    };
+                    // Found it, exit loops
+                    break;
+                  }
+                }
+              } catch (error) {
+                console.error('[API] Failed to parse entity tool response:', error);
+              }
             }
           }
-        } catch (error) {
-          // Tool message might not be JSON, that's okay - skip it
-          console.error('[API] Failed to parse entity tool response:', error);
+        }
+        // If we found a visualization, exit outer loop
+        if (entityVisualization) {
+          break;
         }
       }
     }

@@ -21,6 +21,7 @@ import { EntityVisualization } from '@/components/entity';
 import { AvatarBackground } from '@/components/AvatarBackground';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { VoiceInput, SubtitlesDisplay, AvatarRenderer } from '@/components/avatar';
+import { useAssetUrl } from '@/hooks/useAssetUrl';
 
 const RECONNECT_TIMEOUT_MS = 3600000;
 const COMPANY_INFO_HIDE_DELAY_MS = 2000;
@@ -29,6 +30,14 @@ export const AvatarPage: React.FC = () => {
   const router = useRouter();
   const { hydrated, currentProfile, profileState } = useProfile();
   const theme = useTheme();
+  
+  // Fetch authenticated logo URL
+  const profileHasLogo = currentProfile?.logoBlobUrl ? true : false;
+  const logoSrc = useAssetUrl(
+    currentProfile?.id || null,
+    'logo',
+    !!currentProfile?.id && profileHasLogo
+  );
 
   // All hooks must be called before any early returns
   const [currentSubtitle, setCurrentSubtitle] = useState('');
@@ -212,7 +221,10 @@ export const AvatarPage: React.FC = () => {
 
   return (
     <main className={`fixed inset-0 h-screen w-full overflow-hidden theme-transition ${theme === 'light' ? 'bg-zinc-50' : 'bg-black'}`}>
-      <AvatarBackground backgroundUrl={hydrated.appearance.backgroundUrl} />
+      <AvatarBackground 
+        backgroundUrl={hydrated.appearance.backgroundUrl} 
+        backgroundBlobUrl={currentProfile.backgroundBlobUrl}
+      />
 
       <AvatarRenderer avatarConfig={avatarConfig} />
 
@@ -224,6 +236,40 @@ export const AvatarPage: React.FC = () => {
 
       {isAvatarReady && !isClosing && (
         <>
+          {/* Logo - Top Left */}
+          {logoSrc && (
+            <div className="absolute top-4 left-4 z-50">
+              {hydrated?.appearance.logoShowContainer ? (
+                <div className={`rounded-full backdrop-blur-md border-2 ${
+                  theme === 'light' ? 'bg-white/90 border-zinc-300' : 'bg-zinc-900/90 border-zinc-700'
+                } shadow-lg flex items-center justify-center px-5 py-3`}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={logoSrc}
+                    alt={currentProfile?.name || 'Logo'}
+                    className="object-contain h-7 w-auto"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="flex items-center justify-center">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={logoSrc}
+                    alt={currentProfile?.name || 'Logo'}
+                    className="object-contain h-8 w-auto drop-shadow-lg"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* End Session Button - Top Right */}
           <button
             onClick={handleHomeClick}
             className={`absolute top-4 right-4 z-50 flex items-center gap-2 px-4 py-2 rounded-full theme-transition ${

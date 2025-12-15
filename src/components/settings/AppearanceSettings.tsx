@@ -17,10 +17,12 @@ interface AppearanceSettingsProps {
   appDescription: string;
   logoUrl: string | null; // API endpoint URL or null
   backgroundUrl: string | null; // API endpoint URL or null
+  logoShowContainer: boolean;
   onTitleChange: (title: string) => void;
   onDescriptionChange: (description: string) => void;
   onLogoChange: (url: string | null) => void;
   onBackgroundChange: (url: string | null) => void;
+  onLogoShowContainerChange: (show: boolean) => void;
   profileId: string;
 }
 
@@ -29,10 +31,12 @@ export const AppearanceSettings: React.FC<AppearanceSettingsProps> = ({
   appDescription,
   logoUrl,
   backgroundUrl,
+  logoShowContainer,
   onTitleChange,
   onDescriptionChange,
   onLogoChange,
   onBackgroundChange,
+  onLogoShowContainerChange,
   profileId,
 }) => {
   const theme = useTheme();
@@ -131,6 +135,22 @@ export const AppearanceSettings: React.FC<AppearanceSettingsProps> = ({
             useBlobUrl={true}
             formDataFields={{ assetType: 'logo' }}
           />
+          
+          {logoUrl && (
+            <div className="mt-4 flex items-center gap-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={logoShowContainer}
+                  onChange={(e) => onLogoShowContainerChange(e.target.checked)}
+                  className="w-4 h-4 rounded border-[var(--border-color)] text-[var(--accent-primary)] focus:ring-2 focus:ring-[var(--accent-focus-ring)]"
+                />
+                <span className="text-sm text-[var(--text-secondary)]">
+                  Show container around logo
+                </span>
+              </label>
+            </div>
+          )}
         </div>
       </div>
 
@@ -144,16 +164,34 @@ export const AppearanceSettings: React.FC<AppearanceSettingsProps> = ({
             theme === 'light' ? 'bg-white' : 'bg-zinc-900'
           }`}>
             {authenticatedBackgroundUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={authenticatedBackgroundUrl}
-                alt="Background"
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  console.error('[AppearanceSettings] Failed to load background:', authenticatedBackgroundUrl);
-                  e.currentTarget.style.display = 'none';
-                }}
-              />
+              (() => {
+                const isVideo = authenticatedBackgroundUrl.match(/\.(mp4|webm)(\?|$)/i) || backgroundUrl?.match(/\.(mp4|webm)(\?|$)/i);
+                return isVideo ? (
+                  <video
+                    src={authenticatedBackgroundUrl}
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      console.error('[AppearanceSettings] Failed to load background (video):', authenticatedBackgroundUrl);
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={authenticatedBackgroundUrl}
+                    alt="Background"
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      console.error('[AppearanceSettings] Failed to load background:', authenticatedBackgroundUrl);
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                );
+              })()
             ) : (
               <div className={`w-full h-full flex items-center justify-center text-xs ${theme === 'light' ? 'text-zinc-400' : 'text-zinc-500'}`}>
                 Loading...

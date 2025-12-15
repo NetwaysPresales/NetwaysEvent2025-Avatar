@@ -41,14 +41,12 @@ export async function getOrCreateConversation(
     // If not found or doesn't match, create new
   }
 
-  // Create new conversation
-  const conversation = await transaction(async (tx) => {
-    return await tx.conversation.create({
-      data: {
-        userId,
-        profileId,
-      },
-    });
+  // Create new conversation (no transaction needed for single operation)
+  const conversation = await db.conversation.create({
+    data: {
+      userId,
+      profileId,
+    },
   });
 
   return conversation.id;

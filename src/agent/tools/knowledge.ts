@@ -1,4 +1,5 @@
-import { tool } from '@langchain/core/tools';
+import { DynamicStructuredTool } from '@langchain/core/tools';
+import { z } from 'zod';
 import { getCachedKnowledgeFiles } from '@/lib/knowledge-cache';
 
 /**
@@ -9,10 +10,15 @@ import { getCachedKnowledgeFiles } from '@/lib/knowledge-cache';
  * @returns Knowledge base tool
  */
 export function createKnowledgeBaseTool(userId: string, profileId: string) {
-  return tool(
-    async (input: string) => {
+  const knowledgeTool = new DynamicStructuredTool({
+    name: 'knowledge_base',
+    description: 'Access the dynamic knowledge base. Input can be "list" to see files, or a specific topic/filename to search for information. Always check this if you cannot answer from your system prompt.',
+    schema: z.object({
+      query: z.string().describe('The search query, filename, or "list" to see available files')
+    }),
+    func: async ({ query }: { query: string }): Promise<string> => {
       try {
-        const command = input.trim().toLowerCase();
+        const command = (query || '').trim().toLowerCase();
 
         // Get cached knowledge files from database
         const cachedFiles = await getCachedKnowledgeFiles(userId, profileId);
@@ -76,31 +82,15 @@ export function createKnowledgeBaseTool(userId: string, profileId: string) {
           return combinedResults.slice(0, 8000);
         }
 
-        return `No relevant information found in the knowledge base for: "${input}". Available files: ${cachedFiles.map(f => f.filename).join(', ')}. Try asking about a specific topic or file.`;
+        return `No relevant information found in the knowledge base for: "${query}". Available files: ${cachedFiles.map(f => f.filename).join(', ')}. Try asking about a specific topic or file.`;
 
       } catch (error) {
         console.error('[Tool] Knowledge Error:', error);
         return "Error accessing knowledge base. Please try again.";
       }
-    },
-    {
-      name: 'knowledge_base',
-      description: 'Access the dynamic knowledge base. Input can be "list" to see files, or a specific topic/filename to search for information. Always check this if you cannot answer from your system prompt.'
     }
-  );
+  });
+  
+  return knowledgeTool;
 }
 
-/**
- * Legacy export for backward compatibility
- * Note: This will fail if used without userId/profileId context
- * Use createKnowledgeBaseTool() instead
- */
-export const knowledgeBaseTool = tool(
-  async () => {
-    return "Knowledge base tool requires user and profile context. Please use the createKnowledgeBaseTool() function with userId and profileId.";
-  },
-  {
-    name: 'knowledge_base',
-    description: 'Access the dynamic knowledge base. This tool requires user and profile context.'
-  }
-);

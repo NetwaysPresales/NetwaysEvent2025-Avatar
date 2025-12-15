@@ -6,7 +6,7 @@
 
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useProfile } from '@/context/ProfileContext';
 import { useTheme } from '@/hooks/useTheme';
@@ -40,6 +40,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setAppDescription,
     setLogoUrl,
     setBackgroundUrl,
+    setLogoShowContainer,
     showSpeechApiKey,
     setShowSpeechApiKey,
     showOpenAIApiKey,
@@ -49,6 +50,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const theme = useTheme();
   const [activeTab, setActiveTab] = useState<'settings' | 'appearance' | 'knowledge' | 'entities'>('settings');
   const [isSaving, setIsSaving] = useState(false);
+  const [lastProfileId, setLastProfileId] = useState<string | null>(null);
+
+  // Close modal if profile changes while it's open
+  // This ensures settings always show the current profile's data
+  useEffect(() => {
+    if (isOpen && currentProfile) {
+      if (lastProfileId && lastProfileId !== currentProfile.id) {
+        // Profile changed while modal was open - close it to prevent showing wrong data
+        onClose();
+        setLastProfileId(null);
+      } else {
+        // Track the current profile ID
+        setLastProfileId(currentProfile.id);
+      }
+    } else if (!isOpen) {
+      // Reset when modal closes
+      setLastProfileId(null);
+    }
+  }, [isOpen, currentProfile, lastProfileId, onClose]);
 
   if (!isOpen || !hydrated || !currentProfile || isSaving) return null;
 
@@ -186,10 +206,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   appDescription={hydrated.appearance.appDescription}
                   logoUrl={hydrated.appearance.logoUrl}
                   backgroundUrl={hydrated.appearance.backgroundUrl}
+                  logoShowContainer={hydrated.appearance.logoShowContainer}
                   onTitleChange={setAppTitle}
                   onDescriptionChange={setAppDescription}
                   onLogoChange={(url) => setLogoUrl(url)}
                   onBackgroundChange={(url) => setBackgroundUrl(url)}
+                  onLogoShowContainerChange={setLogoShowContainer}
                   profileId={currentProfile.id}
                 />
               </motion.div>

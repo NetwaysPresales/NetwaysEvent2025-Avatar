@@ -6,7 +6,7 @@
 
 'use client';
 
-import React, { useState, useCallback, useEffect, useImperativeHandle, forwardRef } from 'react';
+import React, { useState, useCallback, useEffect, useImperativeHandle, forwardRef, useRef } from 'react';
 import { useTheme } from '@/hooks/useTheme';
 import { useMediaUrl } from '@/hooks/useMediaUrl';
 import { Button, Input, Select, Textarea } from '@/components/ui';
@@ -169,6 +169,7 @@ export const EntityEditor = forwardRef<EntityEditorRef, EntityEditorProps>(({
     return mediaMap;
   });
   const [isSaving, setIsSaving] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const generateId = () => `id-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -220,6 +221,83 @@ export const EntityEditor = forwardRef<EntityEditorRef, EntityEditorProps>(({
       ...prev,
       [fieldId]: value,
     }));
+  }, []);
+
+  // Simple JSON import for entity definition (structure + data)
+  const handleImportJson = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    // Allow re-selecting the same file later
+    event.target.value = '';
+
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+
+      // Optional: name and description
+      if (typeof parsed.name === 'string') {
+        setName(parsed.name);
+      }
+      if (typeof parsed.description === 'string') {
+        setDescription(parsed.description);
+      }
+
+      // Optional: layout
+      const importedLayout = parsed.structure?.layout;
+      if (importedLayout && ['card', 'sidebar', 'modal', 'fullscreen'].includes(importedLayout)) {
+        setLayout(importedLayout as EntityStructure['layout']);
+      }
+
+      // Fields
+      const importedFields = Array.isArray(parsed.structure?.fields) ? parsed.structure.fields : [];
+      if (importedFields.length > 0) {
+        const normalizeType = (t: unknown): EntityField['type'] => {
+          if (typeof t !== 'string') return 'text';
+          switch (t) {
+            case 'text':
+            case 'rich_text':
+            case 'number':
+            case 'currency':
+            case 'date':
+            case 'image':
+            case 'video':
+            case 'url':
+            case 'email':
+            case 'phone':
+            case 'boolean':
+            case 'json':
+              return t;
+            // Friendly aliases from demo JSON
+            case 'textarea':
+              return 'rich_text';
+            case 'checkbox':
+              return 'boolean';
+            default:
+              return 'text';
+          }
+        };
+
+        const newFields: EntityField[] = importedFields.map((f: any, idx: number) => ({
+          id: typeof f.id === 'string' ? f.id : generateId(),
+          label: typeof f.label === 'string' ? f.label : '',
+          type: normalizeType(f.type),
+          order: typeof f.order === 'number' ? f.order : idx + 1,
+          required: Boolean(f.required),
+          display: f.display && typeof f.display === 'object' ? f.display : undefined,
+        }));
+
+        setFields(newFields);
+      }
+
+      // Data (optional)
+      if (parsed.data && typeof parsed.data === 'object' && !Array.isArray(parsed.data)) {
+        setData(parsed.data as Record<string, unknown>);
+      }
+    } catch (error) {
+      console.error('[EntityEditor] Failed to import entity JSON:', error);
+      alert('Failed to import JSON. Please make sure the file is valid entity JSON.');
+    }
   }, []);
 
   const loadMediaFiles = useCallback(async (entityId: string) => {
@@ -341,12 +419,27 @@ export const EntityEditor = forwardRef<EntityEditorRef, EntityEditorProps>(({
               Define the fields for this entity. Each field needs a name and type.
             </p>
           </div>
-          <Button
-            variant="secondary"
-            onClick={addField}
-          >
-            + Add Field
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              Import JSON
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={addField}
+            >
+              + Add Field
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json,application/json"
+              className="hidden"
+              onChange={handleImportJson}
+            />
+          </div>
         </div>
 
         {fields.length === 0 ? (

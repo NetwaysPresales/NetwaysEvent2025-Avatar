@@ -43,10 +43,11 @@ model Profile {
   sttConfig    Json @map("stt_config")
 
   // Appearance
-  appTitle       String? @map("app_title") @db.VarChar(255)
-  appDescription String? @map("app_description") @db.Text
-  theme          String  @default("light") @db.VarChar(20)
-  accentColor    Json?   @map("accent_color")
+  appTitle          String? @map("app_title") @db.VarChar(255)
+  appDescription    String? @map("app_description") @db.Text
+  theme             String  @default("light") @db.VarChar(20)
+  accentColor       Json?   @map("accent_color")
+  logoShowContainer Boolean @default(true) @map("logo_show_container")
 
   // Asset references (Blob Storage URLs)
   logoBlobUrl       String? @map("logo_blob_url") @db.VarChar(500)
@@ -99,6 +100,7 @@ model Entity {
   profile    Profile           @relation(fields: [profileId], references: [id], onDelete: Cascade)
   mediaFiles EntityMediaFile[]
 
+  @@unique([profileId, name], name: "unique_entity_name_per_profile")
   @@index([userId, profileId], name: "idx_entities_user_profile")
   @@index([profileId, name], name: "idx_entities_profile_name")
   @@map("entities")

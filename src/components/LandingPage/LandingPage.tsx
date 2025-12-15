@@ -222,8 +222,12 @@ export const LandingPage: React.FC = () => {
       <CreateProfileModal
         isOpen={isCreating}
         onClose={() => setIsCreating(false)}
-        onProfileCreated={(profile) => {
-          loadProfile(profile.id);
+        onProfileCreated={async (profile) => {
+          // Close settings modal if open (it might be showing previous profile's data)
+          setIsSettingsOpen(false);
+          // Load the profile immediately to ensure profiles list is updated with correct metadata
+          // This ensures the card shows the correct avatarConfig (character, style)
+          await loadProfile(profile.id);
         }}
       />
 

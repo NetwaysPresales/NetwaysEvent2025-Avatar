@@ -124,6 +124,16 @@ export const EntitySettings: React.FC<EntitySettingsProps> = ({ profileId }) => 
     }
   }, [entityValidation]);
 
+  const handleValidationChange = useCallback((isValid: boolean, isSaving: boolean) => {
+    setEntityValidation(prev => {
+      // Avoid unnecessary state updates that can trigger extra renders
+      if (prev.isValid === isValid && prev.isSaving === isSaving) {
+        return prev;
+      }
+      return { isValid, isSaving };
+    });
+  }, []);
+
   const handleEditorSave = useCallback(async (entityData: {
     name: string;
     description: string;
@@ -269,7 +279,7 @@ export const EntitySettings: React.FC<EntitySettingsProps> = ({ profileId }) => 
                 entity={editingEntity || null}
                 onSave={handleEditorSave}
                 onCancel={() => setEditingEntity(undefined)}
-                onValidationChange={(isValid, isSaving) => setEntityValidation({ isValid, isSaving })}
+                onValidationChange={handleValidationChange}
               />
             </div>
             <div className={`flex-shrink-0 border-t ${theme === 'light' ? 'border-zinc-200 bg-white' : 'border-zinc-800 bg-zinc-900'} px-6 py-4 rounded-b-2xl`}>

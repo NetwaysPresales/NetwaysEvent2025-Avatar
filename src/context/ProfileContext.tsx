@@ -53,6 +53,7 @@ interface ProfileContextType {
   setAppDescription: (description: string) => void;
   setLogoUrl: (url: string | null) => void;
   setBackgroundUrl: (url: string | null) => void;
+  setLogoShowContainer: (show: boolean) => void;
   setTheme: (theme: 'light' | 'dark') => void;
   toggleTheme: () => void;
   setAccentColor: (color: AccentColor | null) => void;
@@ -147,6 +148,48 @@ export const ProfileProvider = ({ children }: { children: ReactNode }) => {
         const hydrated = hydrateProfile(profile);
         setProfileState({ type: 'loaded', profile, hydrated });
         
+        // Update the profile in the profiles list to ensure consistency
+        // This ensures card metadata matches the loaded profile data
+        // CRITICAL: Always replace the profile in the list to ensure avatarConfig is correct
+        // Ensure avatarConfig is properly parsed (Prisma JsonValue might be a string)
+        // Also ensure it has the correct structure with character and style
+        let parsedAvatarConfig: AvatarConfig;
+        if (typeof profile.avatarConfig === 'string') {
+          parsedAvatarConfig = JSON.parse(profile.avatarConfig) as AvatarConfig;
+        } else if (profile.avatarConfig && typeof profile.avatarConfig === 'object') {
+          parsedAvatarConfig = profile.avatarConfig as AvatarConfig;
+        } else {
+          // Fallback to default if avatarConfig is invalid
+          const { getDefaultAvatarConfig } = await import('@/lib/config');
+          parsedAvatarConfig = getDefaultAvatarConfig();
+        }
+        
+        const parsedProfile: Profile = {
+          ...profile,
+          avatarConfig: parsedAvatarConfig,
+        };
+        
+        // Debug log to verify avatarConfig is correct
+        console.log('[ProfileContext] Updating profiles list with profile:', {
+          id: parsedProfile.id,
+          name: parsedProfile.name,
+          character: parsedProfile.avatarConfig?.character,
+          style: parsedProfile.avatarConfig?.style,
+        });
+        
+        setProfiles((prevProfiles) => {
+          const existingIndex = prevProfiles.findIndex(p => p.id === parsedProfile.id);
+          if (existingIndex >= 0) {
+            // Replace existing profile with fresh data from database
+            const updated = [...prevProfiles];
+            updated[existingIndex] = parsedProfile;
+            return updated;
+          } else {
+            // Add new profile to the list
+            return [...prevProfiles, parsedProfile];
+          }
+        });
+        
         // Save last used profile ID
         if (typeof window !== 'undefined') {
           window.localStorage.setItem('lastProfileId', id);
@@ -207,6 +250,7 @@ export const ProfileProvider = ({ children }: { children: ReactNode }) => {
         appDescription: hydrated.appearance.appDescription,
         theme: hydrated.appearance.theme,
         accentColor: hydrated.appearance.accentColor,
+        logoShowContainer: hydrated.appearance.logoShowContainer,
         logoBlobUrl,
         backgroundBlobUrl,
       };
@@ -221,8 +265,21 @@ export const ProfileProvider = ({ children }: { children: ReactNode }) => {
         throw new Error(`Failed to save profile: ${res.statusText}`);
       }
 
-      // Reload profile to get updated data
+      // Get the updated profile from the response
+      const responseData = await res.json();
+      const savedProfile = responseData.profile;
+      
+      if (savedProfile) {
+        // Immediately update the profiles list with the saved data to keep card metadata in sync
+        setProfiles((prevProfiles) => {
+          return prevProfiles.map(p => p.id === profile.id ? savedProfile : p);
+        });
+      }
+
+      // Reload profile to get updated data (this will also update the profiles list)
       await loadProfile(profile.id);
+      
+      // Refresh profiles list to ensure everything is in sync
       await refreshProfiles();
     } catch (error) {
       console.error('Failed to save profile', error);
@@ -239,9 +296,25 @@ export const ProfileProvider = ({ children }: { children: ReactNode }) => {
         body: JSON.stringify({ name }),
       });
 
+      if (!res.ok) {
+        throw new Error(`Failed to create profile: ${res.statusText}`);
+      }
+
       const data = await res.json();
       if (data.profile) {
-        await refreshProfiles();
+        const newProfileId = data.profile.id;
+        
+        // Load the profile immediately to ensure it's properly hydrated and added to the list
+        // with correct avatarConfig (character, style) from the database
+        // This ensures the card shows the correct metadata immediately
+        // loadProfile will fetch the profile from GET /api/profiles/[id] which ensures
+        // proper JSON serialization of avatarConfig, and update the profiles list
+        await loadProfile(newProfileId);
+        
+        // After loadProfile completes, the profiles list should be updated
+        // Return the profile from the loaded state (which has correct avatarConfig)
+        // We can't read from state here, but loadProfile already updated it
+        // The return value is mainly for the caller to know the profile was created
         return data.profile;
       }
       return null;
@@ -249,7 +322,7 @@ export const ProfileProvider = ({ children }: { children: ReactNode }) => {
       console.error('Failed to create profile', error);
       return null;
     }
-  }, [refreshProfiles]);
+  }, [loadProfile]);
 
   // Delete profile
   // Note: Confirmation is handled by DeleteProfileConfirmation component
@@ -286,7 +359,10 @@ export const ProfileProvider = ({ children }: { children: ReactNode }) => {
     try {
       const res = await fetch(`/api/profiles/${profileId}/knowledge`);
       const data = await res.json();
-      return data.files || [];
+      // API returns objects with {id, filename, content, uploadedAt}
+      // Extract just the filenames
+      const files = data.files || [];
+      return Array.isArray(files) ? files.map((file: { filename: string }) => file.filename) : [];
     } catch (error) {
       console.error('Failed to fetch knowledge files', error);
       return [];
@@ -440,6 +516,24 @@ export const ProfileProvider = ({ children }: { children: ReactNode }) => {
     });
   }, []);
 
+  const setLogoShowContainer = useCallback((show: boolean) => {
+    setProfileState((prevState) => {
+      if (prevState.type === 'loaded') {
+        return {
+          ...prevState,
+          hydrated: {
+            ...prevState.hydrated,
+            appearance: {
+              ...prevState.hydrated.appearance,
+              logoShowContainer: show,
+            },
+          },
+        };
+      }
+      return prevState;
+    });
+  }, []);
+
   const setTheme = useCallback((theme: 'light' | 'dark') => {
     setProfileState((prevState) => {
       if (prevState.type === 'loaded') {
@@ -565,6 +659,7 @@ export const ProfileProvider = ({ children }: { children: ReactNode }) => {
         setAppDescription,
         setLogoUrl,
         setBackgroundUrl,
+        setLogoShowContainer,
         setTheme,
         toggleTheme,
         setAccentColor,

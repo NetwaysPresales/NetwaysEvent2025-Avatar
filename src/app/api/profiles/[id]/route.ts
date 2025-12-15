@@ -50,8 +50,10 @@ export async function PUT(
             const speechError = validateSpeechConfig(body.speechConfig);
             if (speechError) validationErrors.push(`Speech config: ${speechError}`);
         }
-        if (body.openAIConfig) {
-            const openAIError = validateAzureOpenAIConfig(body.openAIConfig);
+        // Support both openaiConfig (from ProfileContext) and openAIConfig (legacy)
+        const openaiConfig = body.openaiConfig || body.openAIConfig;
+        if (openaiConfig) {
+            const openAIError = validateAzureOpenAIConfig(openaiConfig);
             if (openAIError) validationErrors.push(`OpenAI config: ${openAIError}`);
         }
 
@@ -68,12 +70,13 @@ export async function PUT(
             avatarConfig: body.avatarConfig,
             speechConfig: body.speechConfig,
             ttsConfig: body.ttsConfig,
-            openaiConfig: body.openAIConfig,
+            openaiConfig: openaiConfig, // Use the normalized value
             sttConfig: body.sttConfig,
             appTitle: body.appTitle,
             appDescription: body.appDescription,
             theme: body.theme,
             accentColor: body.accentColor,
+            logoShowContainer: body.logoShowContainer,
         });
 
         return NextResponse.json({ profile });

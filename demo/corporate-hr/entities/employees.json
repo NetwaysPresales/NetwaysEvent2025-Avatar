@@ -1,0 +1,54 @@
+{
+  "name": "Employees",
+  "description": "Employee directory and information",
+  "structure": {
+    "layout": "grid",
+    "fields": [
+      {
+        "id": "employeeId",
+        "label": "Employee ID",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "department",
+        "label": "Department",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "jobTitle",
+        "label": "Job Title",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "startDate",
+        "label": "Start Date",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "location",
+        "label": "Location",
+        "type": "text",
+        "required": false
+      },
+      {
+        "id": "manager",
+        "label": "Manager",
+        "type": "text",
+        "required": false
+      }
+    ]
+  },
+  "data": {
+    "employeeId": "EMP-2024-001",
+    "department": "Human Resources",
+    "jobTitle": "HR Assistant",
+    "startDate": "2024-01-15",
+    "location": "New York Office",
+    "manager": "Sarah Johnson"
+  }
+}
+

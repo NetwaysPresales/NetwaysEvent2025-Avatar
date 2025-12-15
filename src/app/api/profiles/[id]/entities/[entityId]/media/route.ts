@@ -35,15 +35,18 @@ export async function POST(
     }
 
     // Verify entity ownership
-    const entity = await db.entity.findFirst({
+    const entity = await db.entity.findUnique({
       where: {
         id: entityId,
-        userId: session.userId,
-        profileId: profileId,
       },
     });
 
     if (!entity) {
+      return NextResponse.json({ error: 'Entity not found' }, { status: 404 });
+    }
+
+    // Verify ownership
+    if (entity.userId !== session.userId || entity.profileId !== profileId) {
       return NextResponse.json({ error: 'Entity not found' }, { status: 404 });
     }
 

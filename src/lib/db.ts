@@ -25,7 +25,10 @@ function getPrismaClient(): PrismaClient {
     connectionString: url,
     max: 20,
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 2000,
+    connectionTimeoutMillis: 10000, // Increased from 2000ms to 10000ms (10 seconds)
+    // Keep connections alive longer to avoid timeouts
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10000,
   });
 
   const client = new PrismaClient({
@@ -66,5 +69,8 @@ export async function closeDb(): Promise<void> {
 export async function transaction<T>(
   callback: (tx: Omit<PrismaClient, '$on' | '$connect' | '$disconnect' | '$transaction' | '$extends'>) => Promise<T>
 ): Promise<T> {
-  return await db.$transaction(callback) as unknown as T;
+  // Use the actual Prisma client instance directly, not through the proxy
+  // This ensures transaction context is preserved correctly
+  const client = getPrismaClient();
+  return await client.$transaction(callback) as unknown as T;
 }

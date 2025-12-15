@@ -10,6 +10,25 @@ import { requireAuth } from '@/lib/auth';
 import { getProfile } from '@/lib/profile-service';
 import { db, transaction } from '@/lib/db';
 import { setCachedEntities, clearCachedEntities } from '@/lib/server-cache';
+import { Prisma } from '@prisma/client';
+
+// Helper to convert BigInt values (e.g., media file sizes) to numbers for JSON serialization
+function convertBigIntToNumber<T>(value: T): T {
+  if (typeof value === 'bigint') {
+    return Number(value) as unknown as T;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => convertBigIntToNumber(item)) as unknown as T;
+  }
+  if (value && typeof value === 'object') {
+    const result: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+      result[key] = convertBigIntToNumber(val);
+    }
+    return result as unknown as T;
+  }
+  return value;
+}
 
 /**
  * GET /api/profiles/[id]/entities
@@ -62,7 +81,9 @@ export async function GET(
       setCachedEntities(session.userId, profileId, activeEntities, maxUpdatedAt);
     }
 
-    return NextResponse.json({ entities });
+    const safeEntities = convertBigIntToNumber(entities);
+
+    return NextResponse.json({ entities: safeEntities });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     if (errorMessage === 'Unauthorized') {

@@ -1,0 +1,43 @@
+{
+  "name": "Corporate HR Assistant",
+  "appTitle": "HR Portal",
+  "appDescription": "Your AI-powered HR assistant for employee onboarding, benefits, policies, and workplace questions.",
+  "theme": "light",
+  "accentColor": {
+    "r": 59,
+    "g": 130,
+    "b": 246
+  },
+  "logoShowContainer": true,
+  "avatarConfig": {
+    "character": "lisa",
+    "style": "casual-sitting",
+    "customized": false,
+    "useBuiltInVoice": false,
+    "backgroundColor": "#FFFFFFFF",
+    "backgroundImageUrl": "",
+    "transparentBackground": false,
+    "videoCrop": false
+  },
+  "speechConfig": {
+    "region": "westeurope",
+    "apiKey": "",
+    "privateEndpoint": "",
+    "enablePrivateEndpoint": false
+  },
+  "ttsConfig": {
+    "voice": "en-US-AvaMultilingualNeural",
+    "customVoiceEndpointId": ""
+  },
+  "openaiConfig": {
+    "endpoint": "",
+    "apiKey": "",
+    "deploymentName": "gpt-4o-mini",
+    "systemPrompt": "You are a professional HR assistant for a large corporation. Help employees with onboarding questions, benefits enrollment, company policies, leave requests, and general HR inquiries. Be helpful, clear, and maintain confidentiality. Always direct sensitive matters to HR representatives when appropriate."
+  },
+  "sttConfig": {
+    "locales": ["en-US"],
+    "continuousConversation": true
+  }
+}
+

@@ -1,0 +1,61 @@
+{
+  "name": "Support Tickets",
+  "description": "IT support ticket tracking and status",
+  "structure": {
+    "layout": "grid",
+    "fields": [
+      {
+        "id": "ticketNumber",
+        "label": "Ticket Number",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "category",
+        "label": "Category",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "priority",
+        "label": "Priority",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "status",
+        "label": "Status",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "assignedTo",
+        "label": "Assigned To",
+        "type": "text",
+        "required": false
+      },
+      {
+        "id": "createdDate",
+        "label": "Created Date",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "resolved",
+        "label": "Resolved",
+        "type": "checkbox",
+        "required": false
+      }
+    ]
+  },
+  "data": {
+    "ticketNumber": "IT-2024-001234",
+    "category": "Software Request",
+    "priority": "Standard",
+    "status": "In Progress",
+    "assignedTo": "IT Support Team",
+    "createdDate": "2024-12-15",
+    "resolved": false
+  }
+}
+

@@ -1,0 +1,43 @@
+{
+  "name": "Corporate IT Help Desk",
+  "appTitle": "IT Support Portal",
+  "appDescription": "Your internal IT support assistant for technical issues, software access, and IT service requests.",
+  "theme": "dark",
+  "accentColor": {
+    "r": 168,
+    "g": 85,
+    "b": 247
+  },
+  "logoShowContainer": false,
+  "avatarConfig": {
+    "character": "jeff",
+    "style": "business",
+    "customized": false,
+    "useBuiltInVoice": false,
+    "backgroundColor": "#FFFFFFFF",
+    "backgroundImageUrl": "",
+    "transparentBackground": false,
+    "videoCrop": false
+  },
+  "speechConfig": {
+    "region": "westeurope",
+    "apiKey": "",
+    "privateEndpoint": "",
+    "enablePrivateEndpoint": false
+  },
+  "ttsConfig": {
+    "voice": "en-US-AndrewMultilingualNeural",
+    "customVoiceEndpointId": ""
+  },
+  "openaiConfig": {
+    "endpoint": "",
+    "apiKey": "",
+    "deploymentName": "gpt-4o-mini",
+    "systemPrompt": "You are an IT support specialist for a large corporation. Help employees with technical issues, software access requests, password resets, hardware problems, and IT service requests. Be technical but clear, and escalate complex issues to the IT team when needed."
+  },
+  "sttConfig": {
+    "locales": ["en-US"],
+    "continuousConversation": true
+  }
+}
+

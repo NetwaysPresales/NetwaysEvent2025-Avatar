@@ -1,0 +1,54 @@
+{
+  "name": "Government Services",
+  "description": "Available government services and programs",
+  "structure": {
+    "layout": "grid",
+    "fields": [
+      {
+        "id": "serviceName",
+        "label": "Service Name",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "department",
+        "label": "Department",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "processingTime",
+        "label": "Processing Time",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "fee",
+        "label": "Fee",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "availableOnline",
+        "label": "Available Online",
+        "type": "checkbox",
+        "required": false
+      },
+      {
+        "id": "contact",
+        "label": "Contact Information",
+        "type": "textarea",
+        "required": false
+      }
+    ]
+  },
+  "data": {
+    "serviceName": "Business License",
+    "department": "Department of Economic Development",
+    "processingTime": "5-7 business days",
+    "fee": "$500",
+    "availableOnline": true,
+    "contact": "Phone: (555) 123-4567, Email: business@government.gov"
+  }
+}
+

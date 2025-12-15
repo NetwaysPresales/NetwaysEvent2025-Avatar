@@ -28,6 +28,7 @@ export interface HydratedProfile {
     appDescription: string;
     theme: 'light' | 'dark';
     accentColor: AccentColor | null;
+    logoShowContainer: boolean;
   };
 }
 
@@ -92,6 +93,7 @@ export function hydrateProfile(profile: Profile): HydratedProfile {
       appDescription: profile.appDescription || 'AI-powered voice assistant',
       theme: profile.theme || 'light',
       accentColor: profile.accentColor,
+      logoShowContainer: profile.logoShowContainer ?? true,
     },
   };
 }

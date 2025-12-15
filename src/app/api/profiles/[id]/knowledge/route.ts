@@ -203,13 +203,22 @@ export async function POST(
       container: CONTAINERS.KNOWLEDGE_FILES,
     });
 
+    if (!blobUrl) {
+      return NextResponse.json({ error: 'Failed to upload file to blob storage' }, { status: 500 });
+    }
+
+    // Validate required fields before creating
+    if (!file.name || !file.name.trim()) {
+      return NextResponse.json({ error: 'Filename is required' }, { status: 400 });
+    }
+
     // Save to database
     const knowledgeFile = await db.knowledgeFile.create({
       data: {
         userId: session.userId,
         profileId: id,
-        filename: file.name,
-        blobUrl,
+        filename: file.name.trim(),
+        blobUrl: blobUrl,
         azureSearchIndexed: false,
         chunkCount: 0,
       },
