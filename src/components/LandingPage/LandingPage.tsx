@@ -9,7 +9,6 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import Image from 'next/image';
 import { useProfile } from '@/context/ProfileContext';
 import { useTheme } from '@/hooks/useTheme';
 import { useAssetUrl } from '@/hooks/useAssetUrl';
@@ -149,12 +148,12 @@ export const LandingPage: React.FC = () => {
                   transition={{ duration: 0.8, type: "spring" }}
                   className="relative w-64 h-32"
                 >
-                  <Image
+                  {/* Use regular img tag for Azure Blob Storage SAS URLs - Next.js Image optimization doesn't work with SAS tokens */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
                     src={logoSrc}
                     alt="Company Logo"
-                    fill
-                    priority
-                    className="object-contain drop-shadow-2xl"
+                    className="w-full h-full object-contain drop-shadow-2xl"
                     onError={(e) => {
                       console.error('[LandingPage] Failed to load logo:', logoSrc);
                       e.currentTarget.style.display = 'none';
