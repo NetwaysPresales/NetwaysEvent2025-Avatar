@@ -8,6 +8,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
+import { useSession } from 'next-auth/react';
 import type { Profile } from '@/types/profile';
 import type { AvatarConfig, SpeechConfig, TTSConfig, AzureOpenAIConfig } from '@/types/avatar';
 import { AccentColor, generateAccentPalette, applyAccentColor, applyTheme } from '@/lib/theme';
@@ -68,6 +69,7 @@ interface ProfileContextType {
 const ProfileContext = createContext<ProfileContextType | undefined>(undefined);
 
 export const ProfileProvider = ({ children }: { children: ReactNode }) => {
+  const { data: session, status: sessionStatus } = useSession();
   const [profileState, setProfileState] = useState<ProfileState>({ type: 'idle' });
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [isLoadingProfiles, setIsLoadingProfiles] = useState(true);
@@ -76,6 +78,9 @@ export const ProfileProvider = ({ children }: { children: ReactNode }) => {
   
   // Abort controller for cancelling in-flight requests
   const abortControllerRef = useRef<AbortController | null>(null);
+  
+  // Track if we've already loaded profiles to avoid duplicate loads
+  const hasLoadedProfilesRef = useRef(false);
 
   // Derived state
   const currentProfile = profileState.type === 'loaded' ? profileState.profile : null;
@@ -610,33 +615,44 @@ export const ProfileProvider = ({ children }: { children: ReactNode }) => {
     });
   }, []);
 
-  // Initial load - immediately select first profile or last selected
+  // Load profiles when session becomes authenticated
   useEffect(() => {
-    let mounted = true;
-    
-    (async () => {
-      const refreshedProfiles = await refreshProfiles();
-      if (!mounted || refreshedProfiles.length === 0) return;
+    // Only load profiles if we have an authenticated session and haven't loaded yet
+    if (sessionStatus === 'authenticated' && session && !hasLoadedProfilesRef.current) {
+      let mounted = true;
       
-      if (typeof window !== 'undefined') {
-        const lastId = window.localStorage.getItem('lastProfileId');
-        const profileToLoad = lastId && refreshedProfiles.some(p => p.id === lastId)
-          ? lastId
-          : refreshedProfiles[0].id;
+      (async () => {
+        const refreshedProfiles = await refreshProfiles();
+        hasLoadedProfilesRef.current = true;
         
-        // Set loading state immediately for better UX
-        setProfileState({ type: 'loading', profileId: profileToLoad });
+        if (!mounted || refreshedProfiles.length === 0) return;
         
-        // Load immediately without delay
-        await loadProfile(profileToLoad);
-      }
-    })();
+        if (typeof window !== 'undefined') {
+          const lastId = window.localStorage.getItem('lastProfileId');
+          const profileToLoad = lastId && refreshedProfiles.some(p => p.id === lastId)
+            ? lastId
+            : refreshedProfiles[0].id;
+          
+          // Set loading state immediately for better UX
+          setProfileState({ type: 'loading', profileId: profileToLoad });
+          
+          // Load immediately without delay
+          await loadProfile(profileToLoad);
+        }
+      })();
 
-    return () => {
-      mounted = false;
-    };
+      return () => {
+        mounted = false;
+      };
+    }
+    // Reset when session becomes unauthenticated
+    else if (sessionStatus === 'unauthenticated') {
+      hasLoadedProfilesRef.current = false;
+      setProfiles([]);
+      setProfileState({ type: 'idle' });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only run on mount
+  }, [sessionStatus, session]); // Re-run when session status changes
 
   // Cleanup on unmount
   useEffect(() => {

@@ -9,11 +9,13 @@
 import { signIn } from 'next-auth/react';
 import { useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { Input, Button } from '@/components/ui';
 
 export const AuthPage: React.FC = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { update: updateSession } = useSession();
   const callbackUrl = searchParams.get('callbackUrl') || '/';
   
   const [email, setEmail] = useState('');
@@ -36,6 +38,9 @@ export const AuthPage: React.FC = () => {
       if (result?.error) {
         setError('Sign in failed. Please try again.');
       } else {
+        // Update session to trigger refresh in ProfileContext
+        await updateSession();
+        // Navigate to callback URL - ProfileContext will detect session change and load profiles
         router.push(callbackUrl);
         router.refresh();
       }
