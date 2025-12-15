@@ -19,7 +19,7 @@ const CACHE_DIR = path.join(process.cwd(), '.cache', 'knowledge');
 async function ensureCacheDir(): Promise<void> {
   try {
     await fs.mkdir(CACHE_DIR, { recursive: true });
-  } catch (error) {
+  } catch {
     // Directory might already exist, ignore
   }
 }

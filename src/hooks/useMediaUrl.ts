@@ -81,6 +81,10 @@ export function useMediaUrl(
     let cancelled = false;
 
     async function fetchUrl() {
+      if (!blobUrl) {
+        setUrl(null);
+        return;
+      }
       try {
         const res = await fetch(
           `/api/media?blobUrl=${encodeURIComponent(blobUrl)}&expiresInMinutes=${expiresInMinutes}`,

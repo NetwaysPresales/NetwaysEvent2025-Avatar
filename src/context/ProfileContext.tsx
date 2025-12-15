@@ -9,7 +9,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
 import type { Profile } from '@/types/profile';
-import type { AvatarConfig, SpeechConfig, TTSConfig, AzureOpenAIConfig, STTConfig } from '@/types/avatar';
+import type { AvatarConfig, SpeechConfig, TTSConfig, AzureOpenAIConfig } from '@/types/avatar';
 import { AccentColor, generateAccentPalette, applyAccentColor, applyTheme } from '@/lib/theme';
 import { hydrateProfile, type HydratedProfile } from '@/services/profile-hydration';
 import { extractBlobUrl } from '@/lib/asset-url-utils';
@@ -164,8 +164,8 @@ export const ProfileProvider = ({ children }: { children: ReactNode }) => {
       } else {
         throw new Error('Profile not found');
       }
-    } catch (error: any) {
-      if (error.name === 'AbortError') {
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name === 'AbortError') {
         return; // Request was cancelled, ignore
       }
       

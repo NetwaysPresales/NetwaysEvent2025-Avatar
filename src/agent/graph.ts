@@ -1,5 +1,5 @@
 import { createReactAgent } from '@langchain/langgraph/prebuilt';
-import { SystemMessage } from '@langchain/core/messages';
+import { SystemMessage, type BaseMessage } from '@langchain/core/messages';
 import { TavilySearchResults } from '@langchain/community/tools/tavily_search';
 import { createKnowledgeBaseTool } from './tools/knowledge';
 import { getEntityInfoTool, getEntityVisualizationTool } from './tools/entity-visualization';
@@ -28,16 +28,12 @@ LANGUAGE GUIDELINES:
 7) Never mix languages in your response - keep it consistent with the user's input language.
 `;
 
-interface AgentMessage {
-  content: string;
-}
-
 interface AgentInvokeParams {
-  messages: AgentMessage[];
+  messages: BaseMessage[];
 }
 
 interface AgentInvokeResult {
-  messages: AgentMessage[];
+  messages: BaseMessage[];
 }
 
 interface AgentInterface {
@@ -76,9 +72,9 @@ export function buildAgent(config?: BuildAgentConfig | string): AgentInterface {
 
   if (!llm) {
     return {
-      async invoke({ messages }: AgentInvokeParams): Promise<AgentInvokeResult> {
-        const last = messages[messages.length - 1]?.content || '';
-        return { messages: [{ content: 'LLM not configured. Please check your environment variables.' }] };
+      async invoke(): Promise<AgentInvokeResult> {
+        const { AIMessage } = await import('@langchain/core/messages');
+        return { messages: [new AIMessage('LLM not configured. Please check your environment variables.')] };
       }
     };
   }

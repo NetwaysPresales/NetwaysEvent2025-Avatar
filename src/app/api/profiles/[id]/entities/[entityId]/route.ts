@@ -11,6 +11,7 @@ import { requireAuth } from '@/lib/auth';
 import { getProfile } from '@/lib/profile-service';
 import { db } from '@/lib/db';
 import { clearCachedEntities } from '@/lib/server-cache';
+import { Prisma } from '@prisma/client';
 
 /**
  * GET /api/profiles/[id]/entities/[entityId]
@@ -102,15 +103,15 @@ export async function PUT(
     const updateData: {
       name?: string;
       description?: string | null;
-      structure?: any;
-      data?: any;
+      structure?: Prisma.InputJsonValue;
+      data?: Prisma.InputJsonValue;
       isActive?: boolean;
     } = {};
 
     if (body.name !== undefined) updateData.name = body.name.trim();
     if (body.description !== undefined) updateData.description = body.description?.trim() || null;
-    if (body.structure !== undefined) updateData.structure = body.structure;
-    if (body.data !== undefined) updateData.data = body.data;
+    if (body.structure !== undefined) updateData.structure = body.structure as Prisma.InputJsonValue;
+    if (body.data !== undefined) updateData.data = body.data as Prisma.InputJsonValue;
     if (body.isActive !== undefined) updateData.isActive = body.isActive;
 
     const updatedEntity = await db.entity.update({

@@ -23,8 +23,8 @@ async function testRealAssets() {
   console.log('🧪 Testing Real Asset Upload and Retrieval\n');
 
   const PROFILES_DIR = path.join(process.cwd(), 'data', 'profiles');
-  let testUserId: string;
-  let testProfileId: string;
+  let testUserId: string | undefined;
+  let testProfileId: string | undefined;
 
   try {
     // 1. Create test user in database

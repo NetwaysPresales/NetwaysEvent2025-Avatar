@@ -6,7 +6,7 @@
 
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import { useTheme } from '@/hooks/useTheme';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import type { SpeechConfig, STTConfig } from '@/types/avatar';
@@ -43,18 +43,18 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
     },
   });
 
-  const handleMicPress = () => {
+  const handleMicPress = useCallback(() => {
     if (!isConnected) return;
     if (!isListening && !isStarting) {
       startListening();
     }
-  };
+  }, [isConnected, isListening, isStarting, startListening]);
 
-  const handleMicRelease = () => {
+  const handleMicRelease = useCallback(() => {
     if (isListening) {
       stopListening();
     }
-  };
+  }, [isListening, stopListening]);
 
   // Keyboard shortcuts (Spacebar)
   useEffect(() => {
@@ -88,7 +88,7 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [isConnected, isListening, isStarting]);
+  }, [isConnected, isListening, isStarting, handleMicPress, handleMicRelease]);
 
   const error = sttError || (onError ? undefined : undefined);
 

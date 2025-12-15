@@ -7,7 +7,7 @@
 'use client';
 
 import React from 'react';
-import { Input, Select } from '@/components/ui';
+import { Select } from '@/components/ui';
 import type { AvatarConfig } from '@/types/avatar';
 
 interface AvatarSettingsProps {

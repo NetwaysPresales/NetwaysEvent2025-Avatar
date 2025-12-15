@@ -67,7 +67,7 @@ export function useKnowledgeCache(
         try {
           const fetchedFiles = await pendingFetches.get(profileId);
           if (currentProfileIdRef.current === profileId) {
-            setFiles(fetchedFiles);
+            setFiles(fetchedFiles || null);
           }
         } catch (error) {
           console.error(`[useKnowledgeCache] Error waiting for pending fetch for ${profileId}:`, error);

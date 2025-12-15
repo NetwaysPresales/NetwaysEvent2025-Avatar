@@ -27,7 +27,7 @@ type ContainerName = typeof CONTAINERS[keyof typeof CONTAINERS];
 
 // Lazy initialization of BlobServiceClient
 let blobServiceClient: BlobServiceClient | null = null;
-let containerClients: Map<string, ContainerClient> = new Map();
+const containerClients: Map<string, ContainerClient> = new Map();
 
 /**
  * Get or create BlobServiceClient
@@ -146,8 +146,8 @@ export async function deleteAsset(blobUrl: string): Promise<void> {
     const blockBlobClient = containerClient.getBlockBlobClient(blobName);
     
     await blockBlobClient.delete();
-  } catch (error: any) {
-    if (error.statusCode === 404) {
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'statusCode' in error && error.statusCode === 404) {
       // Already deleted, ignore
       return;
     }

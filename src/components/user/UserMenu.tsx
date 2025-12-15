@@ -8,7 +8,6 @@
 
 import React, { useState } from 'react';
 import { signOut, useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
 import { useTheme } from '@/hooks/useTheme';
 import { Button } from '@/components/ui';
 
@@ -19,7 +18,6 @@ interface UserMenuProps {
 export const UserMenu: React.FC<UserMenuProps> = ({ className = '' }) => {
   const theme = useTheme();
   const { data: session, status } = useSession();
-  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 

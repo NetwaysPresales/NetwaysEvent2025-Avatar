@@ -10,8 +10,17 @@
 import { useState, useEffect, useRef } from 'react';
 
 // Cache for entities: key = profileId, value = { entities, expiresAt }
-const entityCache = new Map<string, { entities: any[]; expiresAt: number }>();
-const pendingFetches = new Map<string, Promise<any[]>>();
+interface CachedEntity {
+  id: string;
+  name: string;
+  description: string | null;
+  structure: { layout: string; fields: Array<{ id: string; label: string; type: string; order: number; required?: boolean; display?: Record<string, unknown> }> };
+  data: Record<string, unknown>;
+  isActive: boolean;
+  createdAt: string;
+}
+const entityCache = new Map<string, { entities: CachedEntity[]; expiresAt: number }>();
+const pendingFetches = new Map<string, Promise<CachedEntity[]>>();
 
 /**
  * Clear cached entities for a profile
@@ -39,8 +48,8 @@ export function clearAllEntityCache() {
 export function useEntityCache(
   profileId: string | null,
   enabled: boolean = true
-): any[] | null {
-  const [entities, setEntities] = useState<any[] | null>(null);
+): CachedEntity[] | null {
+  const [entities, setEntities] = useState<CachedEntity[] | null>(null);
   const currentProfileIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -67,7 +76,7 @@ export function useEntityCache(
         try {
           const fetchedEntities = await pendingFetches.get(profileId);
           if (currentProfileIdRef.current === profileId) {
-            setEntities(fetchedEntities);
+            setEntities(fetchedEntities || null);
           }
         } catch (error) {
           console.error(`[useEntityCache] Error waiting for pending fetch for ${profileId}:`, error);

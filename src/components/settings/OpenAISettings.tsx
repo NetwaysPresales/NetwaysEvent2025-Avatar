@@ -6,8 +6,7 @@
 
 'use client';
 
-import React, { useState } from 'react';
-import { useTheme } from '@/hooks/useTheme';
+import React from 'react';
 import { Input, Textarea } from '@/components/ui';
 import type { AzureOpenAIConfig } from '@/types/avatar';
 
@@ -24,7 +23,6 @@ export const OpenAISettings: React.FC<OpenAISettingsProps> = ({
   showApiKey,
   onToggleApiKey,
 }) => {
-  const theme = useTheme();
   return (
     <div className="space-y-6">
       <h3 className="text-sm font-medium text-[var(--accent-primary)] uppercase tracking-wider mb-4">

@@ -71,7 +71,7 @@ function buildFieldValues(
     const fieldValue = data[field.id] ?? null;
     
     // For media fields, attach media files
-    if (field.type === 'image' || field.type === 'video' || field.type === 'gallery') {
+    if (field.type === 'image' || field.type === 'video') {
       const fieldMediaFiles: EntityMediaFile[] = mediaFiles
         .filter((mf) => mf.fieldId === field.id)
         .map((mf) => ({
@@ -198,7 +198,7 @@ export function getEntityInfoTool(
         }
 
         // Validate structure
-        const structure = entity.structure as EntityStructure;
+        const structure = entity.structure as unknown as EntityStructure;
         if (!structure || !structure.layout || !Array.isArray(structure.fields)) {
           return JSON.stringify({
             found: false,
@@ -309,7 +309,7 @@ export function getEntityVisualizationTool(
         }
 
         // Validate structure
-        const structure = entity.structure as EntityStructure;
+        const structure = entity.structure as unknown as EntityStructure;
         if (!structure || !structure.layout || !Array.isArray(structure.fields)) {
           return JSON.stringify({
             found: false,

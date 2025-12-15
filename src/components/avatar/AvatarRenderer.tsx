@@ -17,7 +17,7 @@ interface AvatarRendererProps {
 }
 
 export const AvatarRenderer = forwardRef<HTMLCanvasElement, AvatarRendererProps>(
-  ({ avatarConfig, className = '' }, ref) => {
+  ({ className = '' }, ref) => {
     const { canvasRef, startProcessing, stopProcessing } = useGreenScreen();
 
     // Forward ref to canvas
@@ -61,7 +61,7 @@ export const AvatarRenderer = forwardRef<HTMLCanvasElement, AvatarRendererProps>
       <canvas
         ref={canvasRef}
         className={`absolute inset-0 z-10 w-full h-full ${className}`}
-        style={{ imageRendering: 'high-quality' }}
+        style={{ imageRendering: 'auto' as const }}
       />
     );
   }

@@ -20,17 +20,17 @@ interface Entity {
   name: string;
   description: string | null;
   structure: {
-    layout: string;
+    layout: 'card' | 'sidebar' | 'modal' | 'fullscreen';
     fields: Array<{
       id: string;
       label: string;
-      type: string;
+      type: 'text' | 'rich_text' | 'number' | 'currency' | 'date' | 'image' | 'video' | 'url' | 'email' | 'phone' | 'boolean' | 'json';
       order: number;
       required?: boolean;
-      display?: any;
+      display?: Record<string, unknown>;
     }>;
   };
-  data: Record<string, any>;
+  data: Record<string, unknown>;
   isActive: boolean;
   createdAt: string;
   mediaFiles?: Array<{
@@ -127,8 +127,8 @@ export const EntitySettings: React.FC<EntitySettingsProps> = ({ profileId }) => 
   const handleEditorSave = useCallback(async (entityData: {
     name: string;
     description: string;
-    structure: any;
-    data: Record<string, any>;
+    structure: { layout: string; fields: Array<{ id: string; label: string; type: string; order: number; required?: boolean; display?: Record<string, unknown> }> };
+    data: Record<string, unknown>;
   }) => {
     try {
       const url = editingEntity
@@ -189,7 +189,7 @@ export const EntitySettings: React.FC<EntitySettingsProps> = ({ profileId }) => 
         {entities.length === 0 ? (
           <div className={`p-8 rounded-lg border-2 border-dashed text-center theme-transition ${theme === 'light' ? 'bg-zinc-50 border-zinc-300' : 'bg-zinc-800/50 border-zinc-700'}`}>
             <p className={`text-sm theme-transition ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-400'}`}>
-              No entities yet. Click "New Entity" above to get started.
+              No entities yet. Click &quot;New Entity&quot; above to get started.
             </p>
           </div>
         ) : (
@@ -269,7 +269,7 @@ export const EntitySettings: React.FC<EntitySettingsProps> = ({ profileId }) => 
                 entity={editingEntity || null}
                 onSave={handleEditorSave}
                 onCancel={() => setEditingEntity(undefined)}
-                onValidationChange={setEntityValidation}
+                onValidationChange={(isValid, isSaving) => setEntityValidation({ isValid, isSaving })}
               />
             </div>
             <div className={`flex-shrink-0 border-t ${theme === 'light' ? 'border-zinc-200 bg-white' : 'border-zinc-800 bg-zinc-900'} px-6 py-4 rounded-b-2xl`}>

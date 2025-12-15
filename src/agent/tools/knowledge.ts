@@ -96,7 +96,7 @@ export function createKnowledgeBaseTool(userId: string, profileId: string) {
  * Use createKnowledgeBaseTool() instead
  */
 export const knowledgeBaseTool = tool(
-  async (input: string) => {
+  async () => {
     return "Knowledge base tool requires user and profile context. Please use the createKnowledgeBaseTool() function with userId and profileId.";
   },
   {

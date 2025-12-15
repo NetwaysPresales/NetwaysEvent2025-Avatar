@@ -6,7 +6,6 @@
  */
 
 import { db, transaction } from './db';
-import { PrismaClient } from '@prisma/client';
 
 export interface ConversationMessage {
   role: 'user' | 'assistant' | 'system';
@@ -43,7 +42,7 @@ export async function getOrCreateConversation(
   }
 
   // Create new conversation
-  const conversation = await transaction(async (tx: PrismaClient) => {
+  const conversation = await transaction(async (tx) => {
     return await tx.conversation.create({
       data: {
         userId,
@@ -121,7 +120,7 @@ export async function saveConversationMessages(
   }
 
   // Save messages
-  await transaction(async (tx: PrismaClient) => {
+  await transaction(async (tx) => {
     // Delete existing messages (we'll replace with full history)
     await tx.conversationMessage.deleteMany({
       where: {

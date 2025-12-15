@@ -16,8 +16,7 @@ import { db } from './db';
 import { 
   extractBlobName, 
   extractContainerName, 
-  CONTAINERS,
-  type ContainerName 
+  CONTAINERS
 } from './blob-storage';
 import { 
   BlobServiceClient, 
@@ -147,7 +146,7 @@ export async function getMediaUrl(
   let url: URL;
   try {
     url = new URL(blobUrl);
-  } catch (error) {
+  } catch {
     throw new Error('Invalid blob URL format');
   }
   

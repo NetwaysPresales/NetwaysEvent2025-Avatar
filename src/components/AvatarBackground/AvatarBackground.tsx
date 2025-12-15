@@ -23,8 +23,8 @@ export const AvatarBackground = ({ backgroundUrl }: Props) => {
     const videoRef = useRef<HTMLVideoElement>(null);
     
     // If it's a blob URL, convert it to SAS URL
-    const isBlob = isBlobUrl(backgroundUrl);
-    const authenticatedUrl = useMediaUrl(isBlob ? backgroundUrl : null, { enabled: isBlob });
+    const isBlob = backgroundUrl ? isBlobUrl(backgroundUrl) : false;
+    const authenticatedUrl = useMediaUrl(isBlob && backgroundUrl ? backgroundUrl : null, { enabled: isBlob });
     
     // Use authenticated URL if available, otherwise use original (API endpoint or already SAS URL)
     const src = authenticatedUrl || backgroundUrl;

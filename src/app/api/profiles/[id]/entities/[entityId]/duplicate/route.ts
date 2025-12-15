@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { getProfile } from '@/lib/profile-service';
 import { db, transaction } from '@/lib/db';
-import { PrismaClient } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 /**
  * POST /api/profiles/[id]/entities/[entityId]/duplicate
@@ -47,14 +47,14 @@ export async function POST(
     const newName = body.name?.trim() || `${sourceEntity.name} (Copy)`;
 
     // Create duplicate entity with same structure but empty data
-    const duplicatedEntity = await transaction(async (tx: PrismaClient) => {
+    const duplicatedEntity = await transaction(async (tx) => {
       return await tx.entity.create({
         data: {
           userId: session.userId,
           profileId: profileId,
           name: newName,
           description: sourceEntity.description,
-          structure: sourceEntity.structure, // Copy structure
+          structure: sourceEntity.structure as Prisma.InputJsonValue, // Copy structure
           data: {}, // Empty data
           isActive: sourceEntity.isActive,
         },

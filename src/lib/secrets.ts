@@ -5,15 +5,18 @@
  * Falls back to environment variables if Key Vault is not configured.
  */
 
-let secretCache: Map<string, string> = new Map();
-let keyVaultClient: any = null;
+const secretCache: Map<string, string> = new Map();
+let keyVaultClient: { getSecret: (name: string) => Promise<{ value: string | undefined }> } | false | null = null;
 
 /**
  * Initialize Azure Key Vault client if configured
  */
-async function initializeKeyVault(): Promise<any | null> {
-  if (keyVaultClient !== null) {
+async function initializeKeyVault(): Promise<{ getSecret: (name: string) => Promise<{ value: string | undefined }> } | null> {
+  if (keyVaultClient !== null && keyVaultClient !== false) {
     return keyVaultClient;
+  }
+  if (keyVaultClient === false) {
+    return null;
   }
 
   const keyVaultUrl = process.env.AZURE_KEY_VAULT_URL;
@@ -27,7 +30,13 @@ async function initializeKeyVault(): Promise<any | null> {
     const { DefaultAzureCredential } = await import('@azure/identity');
     
     const credential = new DefaultAzureCredential();
-    keyVaultClient = new SecretClient(keyVaultUrl, credential);
+    const client = new SecretClient(keyVaultUrl, credential);
+    keyVaultClient = {
+      getSecret: async (name: string) => {
+        const secret = await client.getSecret(name);
+        return { value: secret.value };
+      }
+    };
     return keyVaultClient;
   } catch (error) {
     console.warn('Failed to initialize Key Vault client:', error);

@@ -5,7 +5,7 @@
  */
 
 import { getServerSession } from 'next-auth';
-import { getAuthOptions } from '@/app/api/auth/[...nextauth]/route';
+import { getAuthOptions } from '@/lib/auth-config';
 
 /**
  * Extended session type with userId
@@ -44,7 +44,7 @@ export async function getSession(): Promise<SessionWithUserId | null> {
   }
 
   // Type guard to check if session has userId
-  const extendedSession = session as SessionWithUserId;
+  const extendedSession = session as unknown as SessionWithUserId;
   if (!extendedSession.userId) {
     return null;
   }

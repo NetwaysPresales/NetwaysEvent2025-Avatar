@@ -134,7 +134,7 @@ export function useAssetUrl(
         } else if (!cancelled && cacheKeyRef.current === cacheKey) {
           setUrl(null);
         }
-      } catch (error) {
+      } catch {
         if (!cancelled && cacheKeyRef.current === cacheKey) {
           setUrl(null);
         }

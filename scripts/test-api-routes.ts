@@ -284,8 +284,8 @@ async function testAPIRoutes() {
   console.log('🧪 Testing API Routes with Real Data\n');
   console.log(`Test User: ${TEST_EMAIL}\n`);
 
-  let userId: string;
-  let profileId: string;
+  let userId: string | undefined;
+  let profileId: string | undefined;
 
   try {
     // Create test user

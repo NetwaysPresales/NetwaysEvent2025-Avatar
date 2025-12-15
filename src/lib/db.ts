@@ -46,7 +46,7 @@ function getPrismaClient(): PrismaClient {
 // Create a proxy that handles async initialization
 export const db = new Proxy({} as PrismaClient, {
   get(_target, prop) {
-    return (getPrismaClient() as any)[prop];
+    return (getPrismaClient() as PrismaClient)[prop as keyof PrismaClient];
   },
 });
 
@@ -64,7 +64,7 @@ export async function closeDb(): Promise<void> {
  * @returns Result of the callback
  */
 export async function transaction<T>(
-  callback: (tx: PrismaClient) => Promise<T>
+  callback: (tx: Omit<PrismaClient, '$on' | '$connect' | '$disconnect' | '$transaction' | '$extends'>) => Promise<T>
 ): Promise<T> {
-  return await db.$transaction(callback);
+  return await db.$transaction(callback) as unknown as T;
 }

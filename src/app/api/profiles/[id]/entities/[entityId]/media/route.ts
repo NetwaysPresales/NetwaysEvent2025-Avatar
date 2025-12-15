@@ -9,7 +9,6 @@ import { requireAuth } from '@/lib/auth';
 import { getProfile } from '@/lib/profile-service';
 import { db, transaction } from '@/lib/db';
 import { uploadAsset, CONTAINERS, deleteAsset } from '@/lib/blob-storage';
-import { PrismaClient } from '@prisma/client';
 
 /**
  * POST /api/profiles/[id]/entities/[entityId]/media
@@ -96,8 +95,15 @@ export async function POST(
         fieldId: fieldId,
       });
 
+      if (!uploadedBlobUrl) {
+        return NextResponse.json({ error: 'Failed to upload file to blob storage' }, { status: 500 });
+      }
+
+      // At this point, uploadedBlobUrl is definitely a string
+      const blobUrl: string = uploadedBlobUrl;
+
       // Extract blob name from URL
-      const url = new URL(uploadedBlobUrl);
+      const url = new URL(blobUrl);
       const pathParts = url.pathname.split('/').filter(Boolean);
       const blobName = pathParts.slice(1).join('/'); // Remove container name
 
@@ -116,12 +122,12 @@ export async function POST(
       const orderIndex = existingMedia.length > 0 ? existingMedia[0].orderIndex + 1 : 0;
 
       // Save media file metadata to database
-      const mediaFile = await transaction(async (tx: PrismaClient) => {
+      const mediaFile = await transaction(async (tx) => {
         return await tx.entityMediaFile.create({
           data: {
             entityId: entityId,
             fieldId: fieldId,
-            blobUrl: uploadedBlobUrl,
+            blobUrl: blobUrl,
             blobContainer: CONTAINERS.ENTITY_MEDIA,
             blobName: blobName,
             fileType: fileType,

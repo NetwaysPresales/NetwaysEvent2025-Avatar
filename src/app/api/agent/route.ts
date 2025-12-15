@@ -9,7 +9,7 @@ import {
 } from '@/lib/conversation-service';
 import { HumanMessage, AIMessage, ToolMessage } from '@langchain/core/messages';
 import { buildAgent } from '@/agent/graph';
-import type { EntityVisualizationResult, EntityVisualizationResponse } from '@/types/entity-visualization';
+import type { EntityVisualizationResponse } from '@/types/entity-visualization';
 
 /**
  * POST /api/agent
@@ -135,7 +135,8 @@ export async function POST(req: NextRequest) {
       const msg = result.messages[i];
       if (msg instanceof ToolMessage && msg.name === 'visualize_entity') {
         try {
-          const parsed = JSON.parse(msg.content);
+          const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+          const parsed = JSON.parse(content);
           // If visualize_entity was called, it always visualizes (that's what it does!)
           if (parsed.found === true && parsed.entityId) {
             // Validate the structure matches our expected format

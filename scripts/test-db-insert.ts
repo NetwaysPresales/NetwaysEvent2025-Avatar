@@ -81,7 +81,9 @@ async function testInserts() {
     console.log(`✓ Knowledge file created: ${testKnowledgeFile.id}`);
 
     // Test 4: Create an entity template
-    console.log('\n4. Creating test entity template...');
+    // NOTE: entityTemplate and entityInstance models removed from schema, skipping this test
+    console.log('\n4. Skipping entity template/instance test (models removed)...');
+    /*
     const testEntityTemplate = await db.entityTemplate.create({
       data: {
         userId: testUser.id,
@@ -124,6 +126,7 @@ async function testInserts() {
       },
     });
     console.log(`✓ Entity instance created: ${testEntityInstance.id}`);
+    */
 
     // Test 6: Create a conversation
     console.log('\n6. Creating test conversation...');
@@ -157,8 +160,8 @@ async function testInserts() {
       include: {
         profiles: true,
         knowledgeFiles: true,
-        entityTemplates: true,
-        entityInstances: true,
+        // entityTemplates: true, // Model removed
+        // entityInstances: true, // Model removed
         conversations: {
           include: {
             messages: true,
@@ -171,8 +174,8 @@ async function testInserts() {
       console.log(`✓ User retrieved with:`);
       console.log(`  - ${retrievedUser.profiles.length} profile(s)`);
       console.log(`  - ${retrievedUser.knowledgeFiles.length} knowledge file(s)`);
-      console.log(`  - ${retrievedUser.entityTemplates.length} entity template(s)`);
-      console.log(`  - ${retrievedUser.entityInstances.length} entity instance(s)`);
+      // console.log(`  - ${retrievedUser.entityTemplates.length} entity template(s)`); // Model removed
+      // console.log(`  - ${retrievedUser.entityInstances.length} entity instance(s)`); // Model removed
       console.log(`  - ${retrievedUser.conversations.length} conversation(s)`);
       
       if (retrievedUser.conversations[0]) {

@@ -15,7 +15,7 @@ import { useAvatarSession } from '@/hooks/useAvatarSession';
 import { useAgent } from '@/hooks/useAgent';
 import { useAvatarVideo } from '@/hooks/useAvatarVideo';
 import { useAvatarAudio } from '@/hooks/useAvatarAudio';
-import { validateSpeechConfig, validateAzureOpenAIConfig } from '@/lib/config';
+import { validateSpeechConfig, validateAzureOpenAIConfig, getDefaultAzureOpenAIConfig, getDefaultSpeechConfig, getDefaultAvatarConfig, getDefaultTTSConfig } from '@/lib/config';
 import { cleanTextForTTS } from '@/lib/text-processing';
 import { EntityVisualization } from '@/components/entity';
 import { AvatarBackground } from '@/components/AvatarBackground';
@@ -23,7 +23,6 @@ import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { VoiceInput, SubtitlesDisplay, AvatarRenderer } from '@/components/avatar';
 
 const RECONNECT_TIMEOUT_MS = 3600000;
-const COMPANY_INFO_SHOW_DELAY_MS = 300;
 const COMPANY_INFO_HIDE_DELAY_MS = 2000;
 
 export const AvatarPage: React.FC = () => {
@@ -31,25 +30,7 @@ export const AvatarPage: React.FC = () => {
   const { hydrated, currentProfile, profileState } = useProfile();
   const theme = useTheme();
 
-  // Redirect if no profile loaded
-  useEffect(() => {
-    if (profileState.type === 'idle' || (profileState.type === 'loaded' && !hydrated)) {
-      router.push('/');
-    }
-  }, [profileState, hydrated, router]);
-
-  if (!hydrated || !currentProfile) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <p className="text-lg text-[var(--text-secondary)]">Loading profile...</p>
-        </div>
-      </div>
-    );
-  }
-
-  const { speechConfig, avatarConfig, ttsConfig, openaiConfig, sttConfig } = hydrated;
-
+  // All hooks must be called before any early returns
   const [currentSubtitle, setCurrentSubtitle] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [avatarSessionStarted, setAvatarSessionStarted] = useState(false);
@@ -59,38 +40,37 @@ export const AvatarPage: React.FC = () => {
 
   const currentEntityVisualizationRef = useRef<typeof currentEntityVisualization>(null);
 
-  // Audio management
+  // Audio management - safe to call even if hydrated is null
   const { setupAudioElement, unmute, isMuted } = useAvatarAudio({
-    onMuteStateChange: (muted) => {
+    onMuteStateChange: () => {
       // Audio mute state is managed by the hook
     },
   });
 
-  // Video management
+  // Video management - safe to call even if hydrated is null
   const { setupVideoElement } = useAvatarVideo({
-    onVideoReady: (element) => {
+    onVideoReady: () => {
       // Video is ready, green screen processing will start automatically
     },
   });
 
-  // Agent
+  // Agent - provide safe defaults
   const { sendMessage, currentEntityVisualization, updateEntityVisualization } = useAgent({ 
-    openAIConfig: openaiConfig,
+    openAIConfig: hydrated?.openaiConfig || getDefaultAzureOpenAIConfig(),
     profileId: currentProfile?.id || ''
   });
 
-  // Avatar session
+  // Avatar session - provide safe defaults
   const {
     state: avatarState,
     error: avatarError,
     startSession,
     stopSession,
     speak,
-    touch,
   } = useAvatarSession({
-    speechConfig,
-    avatarConfig,
-    ttsConfig,
+    speechConfig: hydrated?.speechConfig || getDefaultSpeechConfig(),
+    avatarConfig: hydrated?.avatarConfig || getDefaultAvatarConfig(),
+    ttsConfig: hydrated?.ttsConfig || getDefaultTTSConfig(),
     autoReconnectMs: RECONNECT_TIMEOUT_MS,
     onVideoTrack: setupVideoElement,
     onAudioTrack: setupAudioElement,
@@ -108,8 +88,16 @@ export const AvatarPage: React.FC = () => {
     },
   });
 
+  // Redirect if no profile loaded
+  useEffect(() => {
+    if (profileState.type === 'idle' || (profileState.type === 'loaded' && !hydrated)) {
+      router.push('/');
+    }
+  }, [profileState, hydrated, router]);
+
   const handleVoiceRecognized = useCallback(
     async (text: string) => {
+      if (!sendMessage || !speak) return;
       setCurrentSubtitle(`You: ${text}`);
       const reply = await sendMessage(text);
       if (reply) {
@@ -121,6 +109,8 @@ export const AvatarPage: React.FC = () => {
   );
 
   const handleStartSession = useCallback(async () => {
+    if (!hydrated || !currentProfile) return;
+    const { speechConfig, openaiConfig } = hydrated;
     const speechError = validateSpeechConfig(speechConfig);
     const openAIError = validateAzureOpenAIConfig(openaiConfig);
     if (speechError) {
@@ -146,11 +136,11 @@ export const AvatarPage: React.FC = () => {
     }
     
     await startSession();
-  }, [speechConfig, openaiConfig, startSession, currentProfile?.id]);
+  }, [hydrated, currentProfile, startSession]);
 
   const hasStartedRef = useRef(false);
   useEffect(() => {
-    if (hasStartedRef.current || avatarSessionStarted) return;
+    if (!hydrated || !currentProfile || hasStartedRef.current || avatarSessionStarted) return;
     hasStartedRef.current = true;
     const timer = setTimeout(() => {
       handleStartSession().catch(e => {
@@ -163,7 +153,7 @@ export const AvatarPage: React.FC = () => {
       clearTimeout(timer);
       hasStartedRef.current = false;
     };
-  }, [handleStartSession, avatarSessionStarted]);
+  }, [handleStartSession, avatarSessionStarted, hydrated, currentProfile]);
 
   const isConnected = avatarState === 'connected' || avatarState === 'speaking';
   const isConnecting = avatarState === 'connecting';
@@ -206,6 +196,19 @@ export const AvatarPage: React.FC = () => {
       router.push('/');
     }
   }, [stopSession, router]);
+
+  // Early return after all hooks
+  if (!hydrated || !currentProfile) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <p className="text-lg text-[var(--text-secondary)]">Loading profile...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const { speechConfig, avatarConfig, sttConfig } = hydrated;
 
   return (
     <main className={`fixed inset-0 h-screen w-full overflow-hidden theme-transition ${theme === 'light' ? 'bg-zinc-50' : 'bg-black'}`}>

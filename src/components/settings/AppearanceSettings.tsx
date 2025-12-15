@@ -70,6 +70,7 @@ export const AppearanceSettings: React.FC<AppearanceSettingsProps> = ({
               theme === 'light' ? 'bg-white' : 'bg-zinc-900'
             }`}>
               {authenticatedLogoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={authenticatedLogoUrl}
                   alt="Logo"
@@ -143,6 +144,7 @@ export const AppearanceSettings: React.FC<AppearanceSettingsProps> = ({
             theme === 'light' ? 'bg-white' : 'bg-zinc-900'
           }`}>
             {authenticatedBackgroundUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={authenticatedBackgroundUrl}
                 alt="Background"

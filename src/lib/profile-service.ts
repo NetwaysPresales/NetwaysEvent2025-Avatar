@@ -16,16 +16,17 @@ import { db, transaction } from './db';
 import { uploadAsset, deleteAsset, CONTAINERS } from './blob-storage';
 import { getMediaUrl } from './media-service';
 import { getDefaultAvatarConfig, getDefaultSpeechConfig, getDefaultAzureOpenAIConfig, getDefaultTTSConfig } from './config';
-import { PrismaClient } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import type { AvatarConfig, SpeechConfig, TTSConfig, AzureOpenAIConfig, STTConfig } from '@/types/avatar';
 
 export interface CreateProfileInput {
   userId: string;
   name: string;
-  avatarConfig?: any;
-  speechConfig?: any;
-  ttsConfig?: any;
-  openaiConfig?: any;
-  sttConfig?: any;
+  avatarConfig?: AvatarConfig;
+  speechConfig?: SpeechConfig;
+  ttsConfig?: TTSConfig;
+  openaiConfig?: AzureOpenAIConfig;
+  sttConfig?: STTConfig;
   appTitle?: string;
   appDescription?: string;
   theme?: 'light' | 'dark';
@@ -34,11 +35,11 @@ export interface CreateProfileInput {
 
 export interface UpdateProfileInput {
   name?: string;
-  avatarConfig?: any;
-  speechConfig?: any;
-  ttsConfig?: any;
-  openaiConfig?: any;
-  sttConfig?: any;
+  avatarConfig?: AvatarConfig;
+  speechConfig?: SpeechConfig;
+  ttsConfig?: TTSConfig;
+  openaiConfig?: AzureOpenAIConfig;
+  sttConfig?: STTConfig;
   appTitle?: string;
   appDescription?: string;
   theme?: 'light' | 'dark';
@@ -73,11 +74,11 @@ export async function createProfile(input: CreateProfileInput) {
     data: {
       userId: input.userId,
       name: input.name,
-      avatarConfig: input.avatarConfig || getDefaultAvatarConfig(),
-      speechConfig: input.speechConfig || getDefaultSpeechConfig(),
-      ttsConfig: input.ttsConfig || getDefaultTTSConfig(),
-      openaiConfig: input.openaiConfig || getDefaultAzureOpenAIConfig(),
-      sttConfig: input.sttConfig || {},
+      avatarConfig: (input.avatarConfig || getDefaultAvatarConfig()) as unknown as Prisma.InputJsonValue,
+      speechConfig: (input.speechConfig || getDefaultSpeechConfig()) as unknown as Prisma.InputJsonValue,
+      ttsConfig: (input.ttsConfig || getDefaultTTSConfig()) as unknown as Prisma.InputJsonValue,
+      openaiConfig: (input.openaiConfig || getDefaultAzureOpenAIConfig()) as unknown as Prisma.InputJsonValue,
+      sttConfig: (input.sttConfig || {}) as unknown as Prisma.InputJsonValue,
       appTitle: input.appTitle || 'Azure Avatar App',
       appDescription: input.appDescription || 'Your AI-powered virtual assistant.',
       theme: input.theme || 'light',
@@ -158,11 +159,11 @@ export async function updateProfile(
     },
     data: {
       ...(updates.name !== undefined && { name: updates.name }),
-      ...(updates.avatarConfig !== undefined && { avatarConfig: updates.avatarConfig }),
-      ...(updates.speechConfig !== undefined && { speechConfig: updates.speechConfig }),
-      ...(updates.ttsConfig !== undefined && { ttsConfig: updates.ttsConfig }),
-      ...(updates.openaiConfig !== undefined && { openaiConfig: updates.openaiConfig }),
-      ...(updates.sttConfig !== undefined && { sttConfig: updates.sttConfig }),
+      ...(updates.avatarConfig !== undefined && { avatarConfig: updates.avatarConfig as unknown as Prisma.InputJsonValue }),
+      ...(updates.speechConfig !== undefined && { speechConfig: updates.speechConfig as unknown as Prisma.InputJsonValue }),
+      ...(updates.ttsConfig !== undefined && { ttsConfig: updates.ttsConfig as unknown as Prisma.InputJsonValue }),
+      ...(updates.openaiConfig !== undefined && { openaiConfig: updates.openaiConfig as unknown as Prisma.InputJsonValue }),
+      ...(updates.sttConfig !== undefined && { sttConfig: updates.sttConfig as unknown as Prisma.InputJsonValue }),
       ...(updates.appTitle !== undefined && { appTitle: updates.appTitle }),
       ...(updates.appDescription !== undefined && { appDescription: updates.appDescription }),
       ...(updates.theme !== undefined && { theme: updates.theme }),
@@ -234,7 +235,7 @@ export async function uploadProfileAsset(
 
     // Step 4: Update database in transaction
     // If this fails, we'll clean up the uploaded blob in the catch block
-    await transaction(async (tx: PrismaClient) => {
+    await transaction(async (tx) => {
       await tx.profile.update({
         where: {
           id: profileId,
@@ -318,7 +319,7 @@ export async function deleteProfileAsset(
   }
 
   // Delete from blob storage and update DB in transaction
-  await transaction(async (tx: PrismaClient) => {
+  await transaction(async (tx) => {
     // Update DB first (remove reference)
     await tx.profile.update({
       where: {

@@ -19,7 +19,7 @@ interface EntityEditorProps {
     name: string;
     description: string | null;
     structure: EntityStructure;
-    data: Record<string, any>;
+    data: Record<string, unknown>;
     mediaFiles?: Array<{
       id: string;
       fieldId: string;
@@ -33,7 +33,7 @@ interface EntityEditorProps {
     name: string;
     description: string;
     structure: EntityStructure;
-    data: Record<string, any>;
+    data: Record<string, unknown>;
   }) => Promise<void>;
   onCancel: () => void;
   onValidationChange?: (isValid: boolean, isSaving: boolean) => void;
@@ -63,7 +63,7 @@ interface EntityField {
   };
 }
 
-const FIELD_TYPES = [
+const FIELD_TYPES: Array<{ value: string; label: string }> = [
   { value: 'text', label: 'Text' },
   { value: 'rich_text', label: 'Rich Text' },
   { value: 'number', label: 'Number' },
@@ -76,14 +76,14 @@ const FIELD_TYPES = [
   { value: 'phone', label: 'Phone' },
   { value: 'boolean', label: 'Boolean' },
   { value: 'json', label: 'JSON' },
-] as const;
+];
 
-const LAYOUT_OPTIONS = [
+const LAYOUT_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'card', label: 'Card' },
   { value: 'sidebar', label: 'Sidebar' },
   { value: 'modal', label: 'Modal' },
   { value: 'fullscreen', label: 'Fullscreen' },
-] as const;
+];
 
 /**
  * Component for previewing entity media with authenticated URLs
@@ -104,6 +104,7 @@ const EntityMediaPreview: React.FC<{
       {authenticatedUrl ? (
         <>
           {fileType === 'image' ? (
+            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={authenticatedUrl}
               alt={altText || ''}
@@ -143,7 +144,6 @@ export const EntityEditor = forwardRef<EntityEditorRef, EntityEditorProps>(({
   profileId,
   entity,
   onSave,
-  onCancel,
   onValidationChange,
 }, ref) => {
   const theme = useTheme();
@@ -151,9 +151,9 @@ export const EntityEditor = forwardRef<EntityEditorRef, EntityEditorProps>(({
   const [description, setDescription] = useState(entity?.description || '');
   const [layout, setLayout] = useState<EntityStructure['layout']>(entity?.structure.layout || 'sidebar');
   const [fields, setFields] = useState<EntityField[]>(entity?.structure.fields || []);
-  const [data, setData] = useState<Record<string, any>>(entity?.data || {});
+  const [data, setData] = useState<Record<string, unknown>>(entity?.data || {});
   const [mediaFiles, setMediaFiles] = useState<Record<string, Array<{ id: string; blobUrl: string; fileType: string; altText: string | null; caption: string | null }>>>(() => {
-    const mediaMap: Record<string, Array<any>> = {};
+    const mediaMap: Record<string, Array<{ id: string; blobUrl: string; fileType: string; altText: string | null; caption: string | null }>> = {};
     entity?.mediaFiles?.forEach((mf) => {
       if (!mediaMap[mf.fieldId]) {
         mediaMap[mf.fieldId] = [];
@@ -215,7 +215,7 @@ export const EntityEditor = forwardRef<EntityEditorRef, EntityEditorProps>(({
     setFields(newFields);
   }, [fields]);
 
-  const updateFieldValue = useCallback((fieldId: string, value: any) => {
+  const updateFieldValue = useCallback((fieldId: string, value: unknown) => {
     setData(prev => ({
       ...prev,
       [fieldId]: value,
@@ -227,8 +227,8 @@ export const EntityEditor = forwardRef<EntityEditorRef, EntityEditorProps>(({
       const res = await fetch(`/api/profiles/${profileId}/entities/${entityId}`);
       if (res.ok) {
         const entityData = await res.json();
-        const mediaMap: Record<string, Array<any>> = {};
-        entityData.entity.mediaFiles?.forEach((mf: any) => {
+        const mediaMap: Record<string, Array<{ id: string; blobUrl: string; fileType: string; altText: string | null; caption: string | null }>> = {};
+        entityData.entity.mediaFiles?.forEach((mf: { id: string; fieldId: string; blobUrl: string; fileType: string; altText: string | null; caption: string | null }) => {
           if (!mediaMap[mf.fieldId]) {
             mediaMap[mf.fieldId] = [];
           }
@@ -352,7 +352,7 @@ export const EntityEditor = forwardRef<EntityEditorRef, EntityEditorProps>(({
         {fields.length === 0 ? (
           <div className={`p-8 rounded-lg border-2 border-dashed text-center theme-transition ${theme === 'light' ? 'bg-zinc-50 border-zinc-300' : 'bg-zinc-800/50 border-zinc-700'}`}>
             <p className={`text-sm theme-transition ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-400'}`}>
-              No fields yet. Click "Add Field" to get started.
+              No fields yet. Click &quot;Add Field&quot; to get started.
             </p>
           </div>
         ) : (
@@ -505,7 +505,7 @@ export const EntityEditor = forwardRef<EntityEditorRef, EntityEditorProps>(({
                     </div>
                   ) : field.type === 'rich_text' ? (
                     <Textarea
-                      value={data[field.id] || ''}
+                      value={String(data[field.id] || '')}
                       onChange={(e) => updateFieldValue(field.id, e.target.value)}
                       placeholder={`Enter ${field.label.toLowerCase()}`}
                       rows={5}
@@ -514,7 +514,7 @@ export const EntityEditor = forwardRef<EntityEditorRef, EntityEditorProps>(({
                     <label className="flex items-center gap-2">
                       <input
                         type="checkbox"
-                        checked={data[field.id] || false}
+                        checked={Boolean(data[field.id])}
                         onChange={(e) => updateFieldValue(field.id, e.target.checked)}
                         className="rounded"
                       />
@@ -525,20 +525,20 @@ export const EntityEditor = forwardRef<EntityEditorRef, EntityEditorProps>(({
                   ) : field.type === 'number' || field.type === 'currency' ? (
                     <Input
                       type="number"
-                      value={data[field.id] || ''}
+                      value={String(data[field.id] || '')}
                       onChange={(e) => updateFieldValue(field.id, parseFloat(e.target.value) || 0)}
                       placeholder={`Enter ${field.label.toLowerCase()}`}
                     />
                   ) : field.type === 'date' ? (
                     <Input
                       type="date"
-                      value={data[field.id] || ''}
+                      value={String(data[field.id] || '')}
                       onChange={(e) => updateFieldValue(field.id, e.target.value)}
                     />
                   ) : (
                     <Input
                       type={field.type === 'email' ? 'email' : field.type === 'url' ? 'url' : field.type === 'phone' ? 'tel' : 'text'}
-                      value={data[field.id] || ''}
+                      value={String(data[field.id] || '')}
                       onChange={(e) => updateFieldValue(field.id, e.target.value)}
                       placeholder={`Enter ${field.label.toLowerCase()}`}
                     />

@@ -147,11 +147,11 @@ function formatEntityForPrompt(entity: {
   id: string;
   name: string;
   description: string | null;
-  structure: any;
-  data: any;
+  structure: { layout: string; fields: Array<{ id: string; label: string; type: string }> };
+  data: Record<string, unknown>;
 }): string {
-  const structure = entity.structure as { layout: string; fields: Array<{ id: string; label: string; type: string }> };
-  const data = entity.data as Record<string, unknown>;
+  const structure = entity.structure;
+  const data = entity.data;
   
   let formatted = `Entity: ${entity.name}\n`;
   formatted += `UUID: ${entity.id}\n`;
@@ -164,7 +164,7 @@ function formatEntityForPrompt(entity: {
   structure.fields.forEach((field) => {
     const value = data[field.id];
     if (value !== null && value !== undefined) {
-      let formattedValue = String(value);
+      const formattedValue = String(value);
       formatted += `- ${field.label} (${field.type}): ${formattedValue}\n`;
     }
   });
@@ -198,7 +198,7 @@ export async function buildSystemPromptWithEntities(
     : 0;
 
   // Try server-side cache first (fastest), with timestamp validation
-  let cachedEntities = getCachedEntities(userId, profileId, currentLastModified);
+  getCachedEntities(userId, profileId, currentLastModified);
 
   // Fetch full entity data from database (always fetch full data for prompt injection)
   const entities = await db.entity.findMany({
@@ -235,7 +235,13 @@ export async function buildSystemPromptWithEntities(
   }
 
   // Build entity information for agent
-  const entityInfo = entities.map(e => formatEntityForPrompt(e)).join('\n\n');
+  const entityInfo = entities.map(e => formatEntityForPrompt({
+    id: e.id,
+    name: e.name,
+    description: e.description,
+    structure: e.structure as { layout: string; fields: Array<{ id: string; label: string; type: string }> },
+    data: e.data as Record<string, unknown>,
+  })).join('\n\n');
 
   // Build entity list with UUIDs for tool calls
   const entityUuidList = entities.map(e => `- ${e.name} (UUID: ${e.id})`).join('\n');

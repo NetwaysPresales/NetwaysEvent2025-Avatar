@@ -27,6 +27,7 @@ export const ProfileCardLogo: React.FC<ProfileCardLogoProps> = ({
   return (
     <>
       {hasLogo && logoSrc && (
+        // eslint-disable-next-line @next/next/no-img-element
         <img
           src={logoSrc}
           alt={profileName}

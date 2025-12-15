@@ -9,7 +9,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { getProfile } from '@/lib/profile-service';
 import { db, transaction } from '@/lib/db';
-import { PrismaClient } from '@prisma/client';
 import { setCachedEntities, clearCachedEntities } from '@/lib/server-cache';
 
 /**
@@ -118,7 +117,7 @@ export async function POST(
     }
 
     // Create entity
-    const entity = await transaction(async (tx: PrismaClient) => {
+    const entity = await transaction(async (tx) => {
       return await tx.entity.create({
         data: {
           userId: session.userId,

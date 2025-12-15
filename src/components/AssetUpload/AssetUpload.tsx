@@ -100,8 +100,8 @@ export const AssetUpload: React.FC<AssetUploadProps> = ({
 
       setUploadProgress(100);
       onUploadComplete?.(url, filename);
-    } catch (err: any) {
-      const errorMsg = err.message || 'Upload failed';
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : 'Upload failed';
       setError(errorMsg);
       onError?.(errorMsg);
     } finally {

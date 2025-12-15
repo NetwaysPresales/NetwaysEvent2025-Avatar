@@ -6,7 +6,7 @@
 
 'use client';
 
-import { useRef, useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 interface UseAvatarAudioOptions {
   onMuteStateChange?: (isMuted: boolean) => void;
@@ -42,7 +42,7 @@ export function useAvatarAudio({ onMuteStateChange }: UseAvatarAudioOptions = {}
 
     const playPromise = element.play();
     if (playPromise !== undefined) {
-      playPromise.catch(error => {
+      playPromise.catch(() => {
         // Auto-mute if autoplay fails
         element.muted = true;
         element.play().catch(e => console.error('Muted play failed:', e));

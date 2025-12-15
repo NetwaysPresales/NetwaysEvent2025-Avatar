@@ -6,7 +6,7 @@
 
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import { Input, Select } from '@/components/ui';
 import type { SpeechConfig } from '@/types/avatar';
 

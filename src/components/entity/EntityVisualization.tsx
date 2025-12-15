@@ -77,7 +77,7 @@ const EntityMediaItem: React.FC<{
   borderColor: string;
   bgColor: string;
   textColor: string;
-}> = ({ blobUrl, type, altText, caption, fieldLabel, theme, borderColor, bgColor, textColor }) => {
+}> = ({ blobUrl, type, altText, caption, fieldLabel, borderColor, bgColor, textColor }) => {
   const authenticatedUrl = useMediaUrl(blobUrl);
 
   if (type === 'image') {
@@ -133,7 +133,7 @@ const EntityMediaItem: React.FC<{
 /**
  * Render a single field based on its type
  */
-function renderField(field: EntityFieldValue, theme: 'light' | 'dark', isPortrait: boolean) {
+function renderField(field: EntityFieldValue, theme: 'light' | 'dark') {
   // Validate field
   if (!field || !field.id || !field.label) {
     return null;
@@ -381,7 +381,7 @@ export const EntityVisualization: React.FC<EntityVisualizationProps> = ({
 
             {/* Entity Fields */}
             <div className="space-y-6">
-              {sortedFields.map((field) => renderField(field, theme, isPortrait))}
+              {sortedFields.map((field) => renderField(field, theme))}
             </div>
           </motion.div>
         )}

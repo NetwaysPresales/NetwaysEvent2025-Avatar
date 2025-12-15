@@ -2,22 +2,22 @@
 
 import { useRef, useState, useCallback } from 'react';
 import type { AzureOpenAIConfig } from '@/types/avatar';
-import type { EntityVisualizationResult } from '@/types/entity-visualization';
+import type { EntityVisualizationResponse } from '@/types/entity-visualization';
 
 type UseAgentProps = {
     openAIConfig: AzureOpenAIConfig;
     profileId: string;
 };
 
-export function useAgent({ openAIConfig, profileId }: UseAgentProps) {
+export function useAgent({ profileId }: UseAgentProps) {
     const conversationIdRef = useRef<string | null>(null);
     const processingRef = useRef(false);
     const lastMessageRef = useRef('');
-    const [currentEntityVisualization, setCurrentEntityVisualization] = useState<EntityVisualizationResult | null>(null);
-    const currentEntityVisualizationRef = useRef<EntityVisualizationResult | null>(null);
+    const [currentEntityVisualization, setCurrentEntityVisualization] = useState<EntityVisualizationResponse | null>(null);
+    const currentEntityVisualizationRef = useRef<EntityVisualizationResponse | null>(null);
     const isSpeakingAboutEntityRef = useRef(false);
 
-    const updateEntityVisualization = useCallback((visualization: EntityVisualizationResult | null, isSpeaking: boolean) => {
+    const updateEntityVisualization = useCallback((visualization: EntityVisualizationResponse | null, isSpeaking: boolean) => {
         setCurrentEntityVisualization(visualization);
         currentEntityVisualizationRef.current = visualization;
         isSpeakingAboutEntityRef.current = isSpeaking;

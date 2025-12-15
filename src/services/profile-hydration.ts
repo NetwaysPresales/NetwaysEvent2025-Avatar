@@ -44,8 +44,8 @@ export function hydrateProfile(profile: Profile): HydratedProfile {
   const speechConfig = {
     ...defaultSpeech,
     ...(profile.speechConfig as Partial<SpeechConfig>),
-    apiKey: (profile.speechConfig as any)?.apiKey || defaultSpeech.apiKey,
-    region: (profile.speechConfig as any)?.region || defaultSpeech.region,
+    apiKey: (profile.speechConfig as Partial<SpeechConfig>)?.apiKey || defaultSpeech.apiKey,
+    region: (profile.speechConfig as Partial<SpeechConfig>)?.region || defaultSpeech.region,
   } as SpeechConfig;
 
   const avatarConfig = {
@@ -61,9 +61,9 @@ export function hydrateProfile(profile: Profile): HydratedProfile {
   const openaiConfig = {
     ...defaultOpenAI,
     ...(profile.openaiConfig as Partial<AzureOpenAIConfig>),
-    apiKey: (profile.openaiConfig as any)?.apiKey || defaultOpenAI.apiKey,
-    endpoint: (profile.openaiConfig as any)?.endpoint || defaultOpenAI.endpoint,
-    deploymentName: (profile.openaiConfig as any)?.deploymentName || defaultOpenAI.deploymentName,
+    apiKey: (profile.openaiConfig as Partial<AzureOpenAIConfig>)?.apiKey || defaultOpenAI.apiKey,
+    endpoint: (profile.openaiConfig as Partial<AzureOpenAIConfig>)?.endpoint || defaultOpenAI.endpoint,
+    deploymentName: (profile.openaiConfig as Partial<AzureOpenAIConfig>)?.deploymentName || defaultOpenAI.deploymentName,
   } as AzureOpenAIConfig;
 
   // STT config with proper defaults
