@@ -102,6 +102,17 @@ export const ProfileProvider = ({ children }: { children: ReactNode }) => {
     setIsLoadingProfiles(true);
     try {
       const res = await fetch('/api/profiles', { cache: 'no-store' });
+      
+      // If unauthorized, redirect to signin
+      if (res.status === 401) {
+        window.location.href = '/auth/signin';
+        return [];
+      }
+      
+      if (!res.ok) {
+        throw new Error(`Failed to fetch profiles: ${res.statusText}`);
+      }
+      
       const data = await res.json();
       if (data.profiles) {
         setProfiles(data.profiles);
