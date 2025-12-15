@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { getProfile } from '@/lib/profile-service';
-import { db, transaction } from '@/lib/db';
+import { db } from '@/lib/db';
 
 /**
  * POST /api/profiles/[id]/entities/[entityId]/duplicate

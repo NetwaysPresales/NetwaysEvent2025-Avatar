@@ -10,7 +10,6 @@ import { requireAuth } from '@/lib/auth';
 import { getProfile } from '@/lib/profile-service';
 import { db, transaction } from '@/lib/db';
 import { setCachedEntities, clearCachedEntities } from '@/lib/server-cache';
-import { Prisma } from '@prisma/client';
 
 // Helper to convert BigInt values (e.g., media file sizes) to numbers for JSON serialization
 function convertBigIntToNumber<T>(value: T): T {

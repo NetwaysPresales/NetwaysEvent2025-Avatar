@@ -250,7 +250,18 @@ export const EntityEditor = forwardRef<EntityEditorRef, EntityEditorProps>(({
       }
 
       // Fields
-      const importedFields = Array.isArray(parsed.structure?.fields) ? parsed.structure.fields : [];
+      type ImportedField = {
+        id?: unknown;
+        label?: unknown;
+        type?: unknown;
+        order?: unknown;
+        required?: unknown;
+        display?: unknown;
+      };
+
+      const importedFields: ImportedField[] = Array.isArray(parsed.structure?.fields)
+        ? (parsed.structure.fields as ImportedField[])
+        : [];
       if (importedFields.length > 0) {
         const normalizeType = (t: unknown): EntityField['type'] => {
           if (typeof t !== 'string') return 'text';
@@ -278,7 +289,7 @@ export const EntityEditor = forwardRef<EntityEditorRef, EntityEditorProps>(({
           }
         };
 
-        const newFields: EntityField[] = importedFields.map((f: any, idx: number) => ({
+        const newFields: EntityField[] = importedFields.map((f, idx) => ({
           id: typeof f.id === 'string' ? f.id : generateId(),
           label: typeof f.label === 'string' ? f.label : '',
           type: normalizeType(f.type),

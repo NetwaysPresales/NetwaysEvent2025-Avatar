@@ -6,24 +6,15 @@ $appName = "avatar-web-app"                    # Replace with your app name
 
 Write-Host "🚀 Starting deployment to Azure Web App..." -ForegroundColor Cyan
 
-# Step 1: Build the application
-Write-Host "📦 Building application..." -ForegroundColor Yellow
-npm run build
+# Step 1: Create deployment package (source + config only)
+Write-Host "📦 Creating deployment package (source only, no node_modules)..." -ForegroundColor Yellow
 
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "❌ Build failed!" -ForegroundColor Red
-    exit 1
-}
-
-# Step 2: Create deployment package
-Write-Host "📦 Creating deployment package..." -ForegroundColor Yellow
-
-# For Next.js standalone, we need to include specific files
+# Include only app source and config. App Service startup command will run npm install/build.
 $filesToInclude = @(
-    ".next",
-    "node_modules",
+    "src",
     "public",
     "prisma",
+    "prisma.config.js",
     "package.json",
     "package-lock.json",
     "next.config.ts",
