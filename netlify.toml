@@ -1,0 +1,26 @@
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  # Exclude NEXT_PUBLIC_* variables from secrets scanning
+  # These are intentionally exposed to the client bundle by Next.js
+  SECRETS_SCAN_OMIT_KEYS = "NEXT_PUBLIC_AZURE_OPENAI_API_KEY,NEXT_PUBLIC_AZURE_OPENAI_ENDPOINT,NEXT_PUBLIC_AZURE_OPENAI_DEPLOYMENT,NEXT_PUBLIC_AZURE_SPEECH_KEY,NEXT_PUBLIC_AZURE_SPEECH_REGION,NEXT_PUBLIC_AVATAR_STYLE,NEXT_PUBLIC_AVATAR_VOICE,NEXT_PUBLIC_AVATAR_CHARACTER,NEXTAUTH_URL"
+
+[[redirects]]
+  from = "/_next/image"
+  to = "/.netlify/images"
+  query = { url = ":url", w = ":width", q = ":quality" }
+  status = 200
+
+[[redirects]]
+  from = "/_ipx/*"
+  to = "/.netlify/images"
+  query = { url = ":url", w = ":width", q = ":quality" }
+  status = 200
+
+[[headers]]
+  for = "/_next/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
