@@ -103,9 +103,9 @@ export const ProfileProvider = ({ children }: { children: ReactNode }) => {
     try {
       const res = await fetch('/api/profiles', { cache: 'no-store' });
       
-      // If unauthorized, redirect to signin
+      // If unauthorized, let middleware handle redirect (don't do client-side redirect here)
       if (res.status === 401) {
-        window.location.href = '/auth/signin';
+        console.warn('Unauthorized - middleware should redirect');
         return [];
       }
       
