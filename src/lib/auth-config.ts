@@ -124,6 +124,18 @@ async function buildAuthOptions(): Promise<NextAuthOptions> {
     );
   }
 
+  // Get NEXTAUTH_SECRET and NEXTAUTH_URL
+  const secret = await getSecret('NEXTAUTH_SECRET').catch(() => {
+    // Fallback for development
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('NEXTAUTH_SECRET not set, using default (NOT SECURE FOR PRODUCTION)');
+      return 'development-secret-change-in-production';
+    }
+    throw new Error('NEXTAUTH_SECRET is required');
+  });
+
+  const nextAuthUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL;
+
   return {
     providers,
     callbacks: {
@@ -178,14 +190,8 @@ async function buildAuthOptions(): Promise<NextAuthOptions> {
       signIn: '/auth/signin',
       error: '/auth/error',
     },
-    secret: await getSecret('NEXTAUTH_SECRET').catch(() => {
-      // Fallback for development
-      if (process.env.NODE_ENV === 'development') {
-        console.warn('NEXTAUTH_SECRET not set, using default (NOT SECURE FOR PRODUCTION)');
-        return 'development-secret-change-in-production';
-      }
-      throw new Error('NEXTAUTH_SECRET is required');
-    }),
+    secret,
+    ...(nextAuthUrl && { url: nextAuthUrl }),
   };
 }
 

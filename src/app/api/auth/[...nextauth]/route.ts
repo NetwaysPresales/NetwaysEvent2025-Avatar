@@ -10,37 +10,32 @@
 import NextAuth from 'next-auth';
 import { getAuthOptions } from '@/lib/auth-config';
 
-// NextAuth handler for App Router
-// Initialize handlers with cached options
-let nextAuthHandler: ((req: Request, context: { params: Promise<{ nextauth: string[] }> }) => Promise<Response>) | null = null;
+// Cache the NextAuth handler once options are loaded
+type NextAuthHandler = (req: Request, context: { params: Promise<{ nextauth: string[] }> }) => Promise<Response>;
 
-async function getHandler() {
-  if (!nextAuthHandler) {
-    const options = await getAuthOptions();
-    nextAuthHandler = NextAuth(options);
+let nextAuthHandler: NextAuthHandler | null = null;
+let handlerPromise: Promise<NextAuthHandler> | null = null;
+
+async function getHandler(): Promise<NextAuthHandler> {
+  if (nextAuthHandler) {
+    return nextAuthHandler;
   }
+  
+  if (!handlerPromise) {
+    handlerPromise = (async (): Promise<NextAuthHandler> => {
+      const authOptions = await getAuthOptions();
+      return NextAuth(authOptions);
+    })();
+  }
+  
+  nextAuthHandler = await handlerPromise;
   return nextAuthHandler;
 }
 
-export async function GET(
-  req: Request,
-  context: { params: Promise<{ nextauth: string[] }> }
-) {
-  const handler = await getHandler();
-  if (!handler) {
-    return new Response('NextAuth handler not initialized', { status: 500 });
-  }
-  return handler(req, context);
+async function handler(req: Request, context: { params: Promise<{ nextauth: string[] }> }): Promise<Response> {
+  const handlerFn = await getHandler();
+  return handlerFn(req, context);
 }
 
-export async function POST(
-  req: Request,
-  context: { params: Promise<{ nextauth: string[] }> }
-) {
-  const handler = await getHandler();
-  if (!handler) {
-    return new Response('NextAuth handler not initialized', { status: 500 });
-  }
-  return handler(req, context);
-}
+export { handler as GET, handler as POST };
 

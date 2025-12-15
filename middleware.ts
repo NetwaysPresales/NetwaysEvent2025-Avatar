@@ -3,41 +3,31 @@
  * 
  * Protects API routes and adds userId to request headers.
  * Uses NextAuth JWT token verification.
+ * 
+ * IMPORTANT: This runs in Edge Runtime on Netlify, so we can only use
+ * environment variables directly - no Node.js APIs or Key Vault.
  */
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
-import { getSecret } from './src/lib/secrets';
 
-// Cache the secret to avoid repeated async calls
-let cachedSecret: string | null = null;
-
-async function getNextAuthSecret(): Promise<string> {
-  if (cachedSecret) {
-    return cachedSecret;
-  }
-
-  // Check direct environment variable first (faster and works if not using Key Vault)
-  if (process.env.NEXTAUTH_SECRET) {
-    cachedSecret = process.env.NEXTAUTH_SECRET;
-    return cachedSecret;
-  }
-
-  try {
-    cachedSecret = await getSecret('NEXTAUTH_SECRET');
-    return cachedSecret;
-  } catch {
+// Get NEXTAUTH_SECRET from environment variable (Edge runtime compatible)
+function getNextAuthSecret(): string {
+  // In Edge runtime, we can only access environment variables directly
+  const secret = process.env.NEXTAUTH_SECRET;
+  
+  if (!secret) {
     // Fallback for development
     if (process.env.NODE_ENV === 'development') {
-      cachedSecret = 'development-secret-change-in-production';
-      return cachedSecret;
+      return 'development-secret-change-in-production';
     }
-    // In production, log error but return a fallback so middleware doesn't completely break
-    console.error('NEXTAUTH_SECRET not found - authentication may not work correctly');
-    cachedSecret = 'fallback-secret-invalid';
-    return cachedSecret;
+    // In production, throw error if secret is missing
+    console.error('[Middleware] NEXTAUTH_SECRET not found - authentication will fail');
+    throw new Error('NEXTAUTH_SECRET environment variable is required');
   }
+  
+  return secret;
 }
 
 export async function middleware(request: NextRequest) {
@@ -54,9 +44,10 @@ export async function middleware(request: NextRequest) {
   }
 
   try {
+    const secret = getNextAuthSecret();
+    
     // Protect API routes (except auth routes)
     if (pathname.startsWith('/api/')) {
-      const secret = await getNextAuthSecret();
       const token = await getToken({
         req: request,
         secret,
@@ -86,7 +77,6 @@ export async function middleware(request: NextRequest) {
     }
 
     // Protect routes that require authentication (root, /avatar, etc.)
-    const secret = await getNextAuthSecret();
     const token = await getToken({
       req: request,
       secret,
