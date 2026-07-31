@@ -15,6 +15,7 @@
 import { db, transaction } from './db';
 import { uploadAsset, deleteAsset, CONTAINERS } from './blob-storage';
 import { getMediaUrl } from './media-service';
+import { deleteProfileKnowledgeChunks } from './knowledge-search';
 import { getDefaultAvatarConfig, getDefaultSpeechConfig, getDefaultAzureOpenAIConfig, getDefaultTTSConfig } from './config';
 import { Prisma } from '@prisma/client';
 import type { AvatarConfig, SpeechConfig, TTSConfig, AzureOpenAIConfig, STTConfig } from '@/types/avatar';
@@ -32,6 +33,7 @@ export interface CreateProfileInput {
   theme?: 'light' | 'dark';
   accentColor?: { r: number; g: number; b: number };
   logoShowContainer?: boolean;
+  showEvidencePanel?: boolean;
 }
 
 export interface UpdateProfileInput {
@@ -46,12 +48,28 @@ export interface UpdateProfileInput {
   theme?: 'light' | 'dark';
   accentColor?: { r: number; g: number; b: number };
   logoShowContainer?: boolean;
+  showEvidencePanel?: boolean;
 }
 
 export interface UploadAssetResult {
   blobUrl: string;
   sasUrl: string;
   filename: string;
+}
+
+function clearApiKey(config: unknown): unknown {
+  if (!config || typeof config !== 'object' || Array.isArray(config)) return config;
+  return { ...config, apiKey: '' };
+}
+
+function redactProfileSecrets<T>(profile: T): T {
+  if (!profile || typeof profile !== 'object') return profile;
+  const value = profile as T & { speechConfig?: unknown; openaiConfig?: unknown };
+  return {
+    ...value,
+    ...(value.speechConfig !== undefined && { speechConfig: clearApiKey(value.speechConfig) }),
+    ...(value.openaiConfig !== undefined && { openaiConfig: clearApiKey(value.openaiConfig) }),
+  };
 }
 
 /**
@@ -77,19 +95,20 @@ export async function createProfile(input: CreateProfileInput) {
       userId: input.userId,
       name: input.name,
       avatarConfig: (input.avatarConfig || getDefaultAvatarConfig()) as unknown as Prisma.InputJsonValue,
-      speechConfig: (input.speechConfig || getDefaultSpeechConfig()) as unknown as Prisma.InputJsonValue,
+      speechConfig: clearApiKey(input.speechConfig || getDefaultSpeechConfig()) as Prisma.InputJsonValue,
       ttsConfig: (input.ttsConfig || getDefaultTTSConfig()) as unknown as Prisma.InputJsonValue,
-      openaiConfig: (input.openaiConfig || getDefaultAzureOpenAIConfig()) as unknown as Prisma.InputJsonValue,
+      openaiConfig: clearApiKey(input.openaiConfig || getDefaultAzureOpenAIConfig()) as Prisma.InputJsonValue,
       sttConfig: (input.sttConfig || {}) as unknown as Prisma.InputJsonValue,
       appTitle: input.appTitle || 'Azure Avatar App',
       appDescription: input.appDescription || 'Your AI-powered virtual assistant.',
       theme: input.theme || 'light',
       accentColor: input.accentColor || { r: 16, g: 185, b: 129 }, // emerald-500
       logoShowContainer: input.logoShowContainer ?? true,
+      showEvidencePanel: input.showEvidencePanel ?? true,
     },
   });
 
-  return profile;
+  return redactProfileSecrets(profile);
 }
 
 /**
@@ -107,7 +126,7 @@ export async function getProfile(userId: string, profileId: string) {
     },
   });
 
-  return profile;
+  return profile ? redactProfileSecrets(profile) : null;
 }
 
 /**
@@ -126,7 +145,7 @@ export async function listProfiles(userId: string) {
     },
   });
 
-  return profiles;
+  return profiles.map(redactProfileSecrets);
 }
 
 /**
@@ -163,19 +182,20 @@ export async function updateProfile(
     data: {
       ...(updates.name !== undefined && { name: updates.name }),
       ...(updates.avatarConfig !== undefined && { avatarConfig: updates.avatarConfig as unknown as Prisma.InputJsonValue }),
-      ...(updates.speechConfig !== undefined && { speechConfig: updates.speechConfig as unknown as Prisma.InputJsonValue }),
+      ...(updates.speechConfig !== undefined && { speechConfig: clearApiKey(updates.speechConfig) as Prisma.InputJsonValue }),
       ...(updates.ttsConfig !== undefined && { ttsConfig: updates.ttsConfig as unknown as Prisma.InputJsonValue }),
-      ...(updates.openaiConfig !== undefined && { openaiConfig: updates.openaiConfig as unknown as Prisma.InputJsonValue }),
+      ...(updates.openaiConfig !== undefined && { openaiConfig: clearApiKey(updates.openaiConfig) as Prisma.InputJsonValue }),
       ...(updates.sttConfig !== undefined && { sttConfig: updates.sttConfig as unknown as Prisma.InputJsonValue }),
       ...(updates.appTitle !== undefined && { appTitle: updates.appTitle }),
       ...(updates.appDescription !== undefined && { appDescription: updates.appDescription }),
       ...(updates.theme !== undefined && { theme: updates.theme }),
       ...(updates.accentColor !== undefined && { accentColor: updates.accentColor }),
       ...(updates.logoShowContainer !== undefined && { logoShowContainer: updates.logoShowContainer }),
+      ...(updates.showEvidencePanel !== undefined && { showEvidencePanel: updates.showEvidencePanel }),
     },
   });
 
-  return profile;
+  return redactProfileSecrets(profile);
 }
 
 /**
@@ -412,6 +432,9 @@ export async function deleteProfile(userId: string, profileId: string) {
       id: true,
       logoBlobUrl: true,
       backgroundBlobUrl: true,
+      knowledgeFiles: {
+        select: { blobUrl: true },
+      },
     },
   });
 
@@ -423,6 +446,11 @@ export async function deleteProfile(userId: string, profileId: string) {
   const assetsToDelete: string[] = [];
   if (profile.logoBlobUrl) assetsToDelete.push(profile.logoBlobUrl);
   if (profile.backgroundBlobUrl) assetsToDelete.push(profile.backgroundBlobUrl);
+  assetsToDelete.push(...profile.knowledgeFiles.map((file) => file.blobUrl));
+
+  if (process.env.AZURE_SEARCH_ENDPOINT) {
+    await deleteProfileKnowledgeChunks(userId, profileId);
+  }
 
   // Delete profile (cascade will handle related records)
   await db.profile.delete({

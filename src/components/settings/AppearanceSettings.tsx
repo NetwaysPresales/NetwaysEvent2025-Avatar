@@ -18,11 +18,13 @@ interface AppearanceSettingsProps {
   logoUrl: string | null; // API endpoint URL or null
   backgroundUrl: string | null; // API endpoint URL or null
   logoShowContainer: boolean;
+  showEvidencePanel: boolean;
   onTitleChange: (title: string) => void;
   onDescriptionChange: (description: string) => void;
   onLogoChange: (url: string | null) => void;
   onBackgroundChange: (url: string | null) => void;
   onLogoShowContainerChange: (show: boolean) => void;
+  onShowEvidencePanelChange: (show: boolean) => void;
   profileId: string;
 }
 
@@ -32,11 +34,13 @@ export const AppearanceSettings: React.FC<AppearanceSettingsProps> = ({
   logoUrl,
   backgroundUrl,
   logoShowContainer,
+  showEvidencePanel,
   onTitleChange,
   onDescriptionChange,
   onLogoChange,
   onBackgroundChange,
   onLogoShowContainerChange,
+  onShowEvidencePanelChange,
   profileId,
 }) => {
   const theme = useTheme();
@@ -64,6 +68,19 @@ export const AppearanceSettings: React.FC<AppearanceSettingsProps> = ({
           placeholder="e.g., AI-powered voice assistant"
           rows={3}
         />
+
+        <label className="flex cursor-pointer items-start justify-between gap-4 rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)]/45 p-4">
+          <span>
+            <span className="block text-sm font-medium text-[var(--text-primary)]">Show evidence panel</span>
+            <span className="mt-1 block text-xs leading-5 text-[var(--text-tertiary)]">Display policy pages, sources, and entity visuals. Turn this off to give the avatar the remaining stage space.</span>
+          </span>
+          <input
+            type="checkbox"
+            checked={showEvidencePanel}
+            onChange={(event) => onShowEvidencePanelChange(event.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 rounded border-[var(--border-color)] text-[var(--accent-primary)] focus:ring-2 focus:ring-[var(--accent-focus-ring)]"
+          />
+        </label>
 
         <div>
           <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">

@@ -14,6 +14,7 @@ import {
 } from '@/lib/config';
 import { buildAssetUrl } from '@/lib/asset-url';
 import type { AccentColor } from '@/lib/theme';
+import { normalizeAvatarConfig } from '@/lib/avatar-catalog';
 
 export interface HydratedProfile {
   speechConfig: SpeechConfig;
@@ -29,6 +30,7 @@ export interface HydratedProfile {
     theme: 'light' | 'dark';
     accentColor: AccentColor | null;
     logoShowContainer: boolean;
+    showEvidencePanel: boolean;
   };
 }
 
@@ -49,10 +51,10 @@ export function hydrateProfile(profile: Profile): HydratedProfile {
     region: (profile.speechConfig as Partial<SpeechConfig>)?.region || defaultSpeech.region,
   } as SpeechConfig;
 
-  const avatarConfig = {
+  const avatarConfig = normalizeAvatarConfig({
     ...defaultAvatar,
     ...(profile.avatarConfig as Partial<AvatarConfig>),
-  } as AvatarConfig;
+  } as AvatarConfig);
 
   const ttsConfig = {
     ...defaultTTS,
@@ -69,7 +71,7 @@ export function hydrateProfile(profile: Profile): HydratedProfile {
 
   // STT config with proper defaults
   const sttConfig: STTConfig = {
-    locales: ['en-US', 'ar-AE'], // Default locales
+    locales: ['en-US', 'ar-AE', 'fr-FR', 'es-ES', 'hi-IN', 'zh-CN', 'ru-RU'],
     continuousConversation: true,
     ...(profile.sttConfig as Partial<STTConfig>),
   };
@@ -94,6 +96,7 @@ export function hydrateProfile(profile: Profile): HydratedProfile {
       theme: profile.theme || 'light',
       accentColor: profile.accentColor,
       logoShowContainer: profile.logoShowContainer ?? true,
+      showEvidencePanel: profile.showEvidencePanel ?? true,
     },
   };
 }

@@ -1,4 +1,5 @@
 export { VoiceInput } from './VoiceInput';
 export { AvatarRenderer } from './AvatarRenderer';
-export { SubtitlesDisplay } from './SubtitlesDisplay';
+export { ConversationPanel } from './ConversationPanel';
+export { VisualWorkspace } from './VisualWorkspace';
 

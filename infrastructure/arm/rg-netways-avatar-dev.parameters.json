@@ -1,0 +1,16 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "accounts_aoai_ntw_avatar_ade1b8_name": { "value": "aoai-ntw-avatar-ade1b8" },
+    "accounts_sp_ntw_avatar_ade1b8_name": { "value": "sp-ntw-avatar-ade1b8" },
+    "containerapps_ca_ntw_avatar_gotenberg_name": { "value": "ca-ntw-avatar-gotenberg" },
+    "flexibleServers_psql_ntw_avatar_ade1b8_name": { "value": "psql-ntw-avatar-ade1b8" },
+    "managedEnvironments_cae_ntw_avatar_docs_name": { "value": "cae-ntw-avatar-docs" },
+    "searchServices_srch_ntw_avatar_ade1b8_name": { "value": "srch-ntw-avatar-ade1b8" },
+    "serverfarms_asp_ntw_avatar_dev_name": { "value": "asp-ntw-avatar-dev" },
+    "sites_app_ntw_avatar_ade1b8_name": { "value": "app-ntw-avatar-ade1b8" },
+    "storageAccounts_stntwavatarade1b8_name": { "value": "stntwavatarade1b8" },
+    "vaults_kv_ntw_avatar_ade1b8_name": { "value": "kv-ntw-avatar-ade1b8" }
+  }
+}

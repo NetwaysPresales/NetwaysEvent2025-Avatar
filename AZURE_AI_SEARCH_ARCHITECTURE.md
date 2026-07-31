@@ -1,5 +1,13 @@
 # Azure AI Search Integration: Vector Database Architecture
 
+> **Implemented July 30, 2026.** The runtime implementation is in
+> `src/lib/knowledge-search.ts`, the upload lifecycle is in
+> `src/app/api/profiles/[id]/knowledge/route.ts`, and agent retrieval is in
+> `src/agent/tools/knowledge.ts`. It uses `text-embedding-3-small`, 1,536-dimensional
+> vectors, hybrid keyword/vector retrieval, and mandatory `userId` plus `profileId`
+> filters. Older proposal snippets later in this document are retained for historical
+> context and are not the source of truth for the deployed implementation.
+
 ## Executive Summary
 
 This document provides a **comprehensive architecture** for integrating **Azure AI Search** (formerly Azure Cognitive Search) as a vector database for the knowledge base, with **per-user and per-preset partitioning** to ensure complete data isolation and dynamic semantic search capabilities.

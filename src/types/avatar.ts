@@ -2,6 +2,8 @@
 export interface AvatarConfig {
   character: string;
   style: string;
+  avatarType?: 'video' | 'photo';
+  photoAvatarBaseModel?: string;
   customized: boolean;
   useBuiltInVoice: boolean;
   backgroundColor?: string;
@@ -47,6 +49,7 @@ export interface AzureOpenAIConfig {
   apiKey: string;
   deploymentName: string;
   systemPrompt: string;
+  initialMessage?: string;
 }
 
 // WebRTC types

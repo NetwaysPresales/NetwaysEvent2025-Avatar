@@ -2,7 +2,14 @@
  * WebRTC utilities for Azure Avatar service
  */
 
-import type { ICEServerConfig } from '@/types/avatar';
+import type { ICEServerConfig, SpeechConfig } from '@/types/avatar';
+
+export interface SpeechSessionCredentials {
+  region: string;
+  ice: ICEServerConfig;
+  apiKey?: string;
+  authorizationToken?: string;
+}
 
 /**
  * Fetch ICE server credentials from Azure
@@ -12,8 +19,9 @@ export async function fetchICEServerCredentials(
   apiKey: string,
   privateEndpoint?: string
 ): Promise<ICEServerConfig> {
-  const url = privateEndpoint
-    ? `https://${privateEndpoint}/tts/cognitiveservices/avatar/relay/token/v1`
+  const endpoint = privateEndpoint?.replace(/^https?:\/\//, '').replace(/\/$/, '');
+  const url = endpoint
+    ? `https://${endpoint}/tts/cognitiveservices/avatar/relay/token/v1`
     : `https://${region}.tts.speech.microsoft.com/cognitiveservices/avatar/relay/token/v1`;
 
   const response = await fetch(url, {
@@ -27,13 +35,46 @@ export async function fetchICEServerCredentials(
     throw new Error(`Failed to fetch ICE server credentials: ${response.status}`);
   }
 
-  const data = await response.json();
+  const data = await response.json() as {
+    Urls: string[];
+    Username: string;
+    Password: string;
+  };
+
+  const turnUrls = data.Urls.filter((url) => url.startsWith('turn:') || url.startsWith('turns:'));
 
   return {
-    urls: [data.Urls[0]],
+    urls: turnUrls.length > 0 ? turnUrls : data.Urls,
     username: data.Username,
     credential: data.Password
   };
+}
+
+/**
+ * Use a profile-supplied key when present, otherwise request short-lived
+ * Speech and TURN credentials from the authenticated server endpoint.
+ */
+export async function fetchSpeechSessionCredentials(
+  config: SpeechConfig
+): Promise<SpeechSessionCredentials> {
+  if (config.apiKey) {
+    return {
+      region: config.region,
+      apiKey: config.apiKey,
+      ice: await fetchICEServerCredentials(
+        config.region,
+        config.apiKey,
+        config.enablePrivateEndpoint ? config.privateEndpoint : undefined
+      ),
+    };
+  }
+
+  const response = await fetch('/api/speech/token', { cache: 'no-store' });
+  if (!response.ok) {
+    throw new Error(`Failed to obtain Azure Speech credentials: ${response.status}`);
+  }
+
+  return response.json() as Promise<SpeechSessionCredentials>;
 }
 
 /**

@@ -51,7 +51,7 @@ async function getBlobServiceClient(): Promise<BlobServiceClient> {
     if (!accountKey) {
       throw new Error('AZURE_STORAGE_ACCOUNT_KEY not found in secrets or environment variables');
     }
-    
+
     const credential = new StorageSharedKeyCredential(accountName, accountKey);
     blobServiceClient = new BlobServiceClient(
       `https://${accountName}.blob.core.windows.net`,
@@ -76,7 +76,7 @@ async function getContainerClient(containerName: ContainerName): Promise<Contain
 
   const serviceClient = await getBlobServiceClient();
   const containerClient = serviceClient.getContainerClient(containerName);
-  
+
   // Ensure container exists
   // Don't set access level - account-level "Allow Blob public access" setting controls this
   // Since public access is disabled at account level, containers will be private
@@ -107,7 +107,7 @@ export async function uploadAsset(
   }
 ): Promise<string> {
   const containerClient = await getContainerClient(options.container);
-  
+
   // Build blob path based on container type
   let blobName: string;
   if (options.container === CONTAINERS.ENTITY_MEDIA && options.instanceId && options.fieldId) {
@@ -117,7 +117,7 @@ export async function uploadAsset(
   }
 
   const blockBlobClient = containerClient.getBlockBlobClient(blobName);
-  
+
   await blockBlobClient.upload(file, file.length, {
     blobHTTPHeaders: {
       blobContentType: options.contentType,
@@ -137,14 +137,14 @@ export async function deleteAsset(blobUrl: string): Promise<void> {
   try {
     const url = new URL(blobUrl);
     const pathParts = url.pathname.split('/').filter(Boolean);
-    
+
     // Extract container name (first part after account name)
     const containerName = pathParts[0] as ContainerName;
-    const blobName = pathParts.slice(1).join('/');
+    const blobName = decodeURIComponent(pathParts.slice(1).join('/'));
 
     const containerClient = await getContainerClient(containerName);
     const blockBlobClient = containerClient.getBlockBlobClient(blobName);
-    
+
     await blockBlobClient.delete();
   } catch (error: unknown) {
     if (error && typeof error === 'object' && 'statusCode' in error && error.statusCode === 404) {
@@ -185,7 +185,7 @@ export async function getAssetUrl(
 
   const blobUrlField = assetType === 'logo' ? 'logoBlobUrl' : 'backgroundBlobUrl';
   const blobUrl = profile[blobUrlField] as string | null;
-  
+
   if (!blobUrl) {
     throw new Error('Asset not found');
   }
@@ -193,15 +193,15 @@ export async function getAssetUrl(
   // Extract blob name from URL
   const blobName = extractBlobName(blobUrl);
   const containerName = CONTAINERS.AVATAR_ASSETS;
-  
+
   // Get account name from URL
   const url = new URL(blobUrl);
   const accountName = url.hostname.split('.')[0];
-  
+
   // Get account key for SAS token generation
   // Connection string already contains the key, so we extract it
   let accountKey: string | undefined;
-  
+
   // Method 1: Extract from connection string (most common - connection string has everything)
   const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
   if (connectionString) {
@@ -210,12 +210,12 @@ export async function getAssetUrl(
       accountKey = keyMatch[1];
     }
   }
-  
+
   // Method 2: Use separate account key (alternative, only needed if NOT using connection string)
   if (!accountKey) {
     accountKey = await getSecret('AZURE_STORAGE_ACCOUNT_KEY');
   }
-  
+
   if (!accountKey) {
     throw new Error(
       'Account key not found for SAS token generation. ' +
@@ -261,12 +261,12 @@ export async function listAssets(
 ): Promise<string[]> {
   const containerClient = await getContainerClient(container);
   const prefix = `${userId}/${profileId}/`;
-  
+
   const blobs: string[] = [];
   for await (const blob of containerClient.listBlobsFlat({ prefix })) {
     blobs.push(blob.name);
   }
-  
+
   return blobs;
 }
 
@@ -276,7 +276,7 @@ export async function listAssets(
 export function extractBlobName(blobUrl: string): string {
   const url = new URL(blobUrl);
   const pathParts = url.pathname.split('/').filter(Boolean);
-  return pathParts.slice(1).join('/'); // Remove container name
+  return decodeURIComponent(pathParts.slice(1).join('/')); // Remove container name
 }
 
 /**
@@ -294,26 +294,118 @@ export function extractContainerName(blobUrl: string): ContainerName {
  * @param blobUrl - Full blob URL
  * @returns Blob content as string
  */
-export async function downloadBlobAsText(blobUrl: string): Promise<string> {
+export async function extractKnowledgeText(buffer: Buffer, filename: string): Promise<string> {
+  if (filename.toLowerCase().endsWith('.docx')) {
+    try {
+      const mammoth = await import('mammoth');
+      const result = await mammoth.extractRawText({ buffer });
+      if (!result.value.trim()) {
+        throw new Error('The document contains no extractable text');
+      }
+      return result.value;
+    } catch (error) {
+      console.error(`[Blob Storage] Failed to parse DOCX ${filename}:`, error);
+      throw new Error(`Text could not be extracted from DOCX ${filename}`);
+    }
+  }
+
+  if (filename.toLowerCase().endsWith('.pdf')) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const PDFParser = require('pdf2json');
+
+      const text = await new Promise<string>((resolve, reject) => {
+        const pdfParser = new PDFParser(null, true);
+        pdfParser.on("pdfParser_dataError", (errData: { parserError: unknown }) => reject(errData.parserError));
+        pdfParser.on("pdfParser_dataReady", () => resolve(pdfParser.getRawTextContent()));
+        pdfParser.parseBuffer(buffer);
+      });
+
+      return text;
+    } catch (error) {
+      console.error(`[Blob Storage] Failed to parse PDF ${filename}:`, error);
+      throw new Error(`Text could not be extracted from PDF ${filename}`);
+    }
+  }
+
+  const content = buffer.toString('utf-8');
+  if (filename.toLowerCase().endsWith('.json')) {
+    return JSON.stringify(JSON.parse(content), null, 2);
+  }
+  return content;
+}
+
+export async function convertKnowledgeDocumentToPdf(buffer: Buffer, filename: string): Promise<Buffer | null> {
+  const extension = filename.split('.').pop()?.toLowerCase();
+  if (extension === 'pdf') return buffer;
+  if (extension !== 'docx') return null;
+
+  const endpoint = process.env.GOTENBERG_URL?.trim().replace(/\/$/, '');
+  if (!endpoint) {
+    throw new Error('DOCX page rendering is unavailable because GOTENBERG_URL is not configured');
+  }
+
+  const form = new FormData();
+  form.append('files', new Blob([new Uint8Array(buffer)], {
+    type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  }), filename);
+  const response = await fetch(`${endpoint}/forms/libreoffice/convert`, {
+    method: 'POST',
+    body: form,
+    signal: AbortSignal.timeout(120_000),
+    cache: 'no-store',
+  });
+  if (!response.ok) {
+    const details = (await response.text()).slice(0, 500);
+    throw new Error(`Document rendering failed (${response.status})${details ? `: ${details}` : ''}`);
+  }
+  return Buffer.from(await response.arrayBuffer());
+}
+
+export interface KnowledgePdfPage {
+  pageNumber: number;
+  content: string;
+}
+
+export async function extractPdfPages(buffer: Buffer): Promise<KnowledgePdfPage[]> {
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const document = await pdfjs.getDocument({
+    data: new Uint8Array(buffer),
+    useWorkerFetch: false,
+    isEvalSupported: false,
+    useSystemFonts: true,
+  }).promise;
+  const pages: KnowledgePdfPage[] = [];
+  try {
+    for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
+      const page = await document.getPage(pageNumber);
+      const textContent = await page.getTextContent();
+      const content = textContent.items
+        .map((item) => 'str' in item ? item.str : '')
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (content) pages.push({ pageNumber, content });
+      page.cleanup();
+    }
+  } finally {
+    await document.destroy();
+  }
+  if (!pages.length) throw new Error('The rendered PDF contains no extractable text');
+  return pages;
+}
+
+export async function downloadBlobBuffer(blobUrl: string): Promise<Buffer> {
   const url = new URL(blobUrl);
   const pathParts = url.pathname.split('/').filter(Boolean);
-  
   const containerName = pathParts[0] as ContainerName;
-  const blobName = pathParts.slice(1).join('/');
-
+  const blobName = decodeURIComponent(pathParts.slice(1).join('/'));
   const containerClient = await getContainerClient(containerName);
-  const blockBlobClient = containerClient.getBlockBlobClient(blobName);
-  
-  const downloadResponse = await blockBlobClient.download();
-  if (!downloadResponse.readableStreamBody) {
-    throw new Error('Blob download failed: no stream body');
-  }
-  
-  const chunks: Buffer[] = [];
-  for await (const chunk of downloadResponse.readableStreamBody) {
-    chunks.push(Buffer.from(chunk));
-  }
-  
-  return Buffer.concat(chunks).toString('utf-8');
+  return containerClient.getBlockBlobClient(blobName).downloadToBuffer();
+}
+
+export async function downloadBlobAsText(blobUrl: string): Promise<string> {
+  const buffer = await downloadBlobBuffer(blobUrl);
+  return extractKnowledgeText(buffer, extractBlobName(blobUrl));
 }
 

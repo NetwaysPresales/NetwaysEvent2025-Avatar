@@ -24,6 +24,15 @@ type ProfileState =
   | { type: 'loaded'; profile: Profile; hydrated: HydratedProfile }
   | { type: 'error'; error: Error; previousProfile?: Profile };
 
+export interface KnowledgeFileSummary {
+  id: string;
+  filename: string;
+  indexed: boolean;
+  chunkCount: number;
+  indexedAt: string | null;
+  uploadedAt: string;
+}
+
 interface ProfileContextType {
   // State
   profileState: ProfileState;
@@ -38,8 +47,8 @@ interface ProfileContextType {
   deleteProfile: (id: string) => Promise<void>;
   
   // Knowledge base operations
-  fetchKnowledgeFiles: (profileId: string) => Promise<string[]>;
-  deleteKnowledgeFile: (profileId: string, filename: string) => Promise<void>;
+  fetchKnowledgeFiles: (profileId: string) => Promise<KnowledgeFileSummary[]>;
+  deleteKnowledgeFile: (profileId: string, fileId: string) => Promise<void>;
   
   // Current profile data (derived from state)
   currentProfile: Profile | null;
@@ -55,15 +64,12 @@ interface ProfileContextType {
   setLogoUrl: (url: string | null) => void;
   setBackgroundUrl: (url: string | null) => void;
   setLogoShowContainer: (show: boolean) => void;
+  setShowEvidencePanel: (show: boolean) => void;
   setTheme: (theme: 'light' | 'dark') => void;
   toggleTheme: () => void;
   setAccentColor: (color: AccentColor | null) => void;
   
   // UI state
-  showSpeechApiKey: boolean;
-  setShowSpeechApiKey: (show: boolean) => void;
-  showOpenAIApiKey: boolean;
-  setShowOpenAIApiKey: (show: boolean) => void;
 }
 
 const ProfileContext = createContext<ProfileContextType | undefined>(undefined);
@@ -73,8 +79,6 @@ export const ProfileProvider = ({ children }: { children: ReactNode }) => {
   const [profileState, setProfileState] = useState<ProfileState>({ type: 'idle' });
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [isLoadingProfiles, setIsLoadingProfiles] = useState(true);
-  const [showSpeechApiKey, setShowSpeechApiKey] = useState(false);
-  const [showOpenAIApiKey, setShowOpenAIApiKey] = useState(false);
   
   // Abort controller for cancelling in-flight requests
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -211,15 +215,10 @@ export const ProfileProvider = ({ children }: { children: ReactNode }) => {
           window.localStorage.setItem('lastProfileId', id);
         }
 
-        // Preload knowledge files and entities in the background (don't block)
-        // Import dynamically to avoid SSR issues
-        Promise.all([
-          import('@/hooks/useKnowledgeCache').then(m => m.preloadKnowledgeFiles(id)),
-          import('@/hooks/useEntityCache').then(m => m.preloadEntities(id)),
-        ]).catch((err) => {
-          console.error('[ProfileContext] Failed to preload knowledge/entities:', err);
-          // Don't block profile loading if preload fails
-        });
+        // Entity metadata is small and still benefits from eager loading.
+        import('@/hooks/useEntityCache')
+          .then((module) => module.preloadEntities(id))
+          .catch((err) => console.error('[ProfileContext] Failed to preload entities:', err));
       } else {
         throw new Error('Profile not found');
       }
@@ -267,6 +266,7 @@ export const ProfileProvider = ({ children }: { children: ReactNode }) => {
         theme: hydrated.appearance.theme,
         accentColor: hydrated.appearance.accentColor,
         logoShowContainer: hydrated.appearance.logoShowContainer,
+        showEvidencePanel: hydrated.appearance.showEvidencePanel,
         logoBlobUrl,
         backgroundBlobUrl,
       };
@@ -371,23 +371,21 @@ export const ProfileProvider = ({ children }: { children: ReactNode }) => {
   }, [loadProfile, refreshProfiles]);
 
   // Knowledge base operations
-  const fetchKnowledgeFiles = useCallback(async (profileId: string): Promise<string[]> => {
+  const fetchKnowledgeFiles = useCallback(async (profileId: string): Promise<KnowledgeFileSummary[]> => {
     try {
       const res = await fetch(`/api/profiles/${profileId}/knowledge`);
       const data = await res.json();
-      // API returns objects with {id, filename, content, uploadedAt}
-      // Extract just the filenames
       const files = data.files || [];
-      return Array.isArray(files) ? files.map((file: { filename: string }) => file.filename) : [];
+      return Array.isArray(files) ? files : [];
     } catch (error) {
       console.error('Failed to fetch knowledge files', error);
       return [];
     }
   }, []);
 
-  const deleteKnowledgeFile = useCallback(async (profileId: string, filename: string): Promise<void> => {
+  const deleteKnowledgeFile = useCallback(async (profileId: string, fileId: string): Promise<void> => {
     try {
-      const res = await fetch(`/api/profiles/${profileId}/knowledge?filename=${encodeURIComponent(filename)}`, {
+      const res = await fetch(`/api/profiles/${profileId}/knowledge?fileId=${encodeURIComponent(fileId)}`, {
         method: 'DELETE',
       });
       if (!res.ok) {
@@ -550,6 +548,24 @@ export const ProfileProvider = ({ children }: { children: ReactNode }) => {
     });
   }, []);
 
+  const setShowEvidencePanel = useCallback((show: boolean) => {
+    setProfileState((prevState) => {
+      if (prevState.type === 'loaded') {
+        return {
+          ...prevState,
+          hydrated: {
+            ...prevState.hydrated,
+            appearance: {
+              ...prevState.hydrated.appearance,
+              showEvidencePanel: show,
+            },
+          },
+        };
+      }
+      return prevState;
+    });
+  }, []);
+
   const setTheme = useCallback((theme: 'light' | 'dark') => {
     setProfileState((prevState) => {
       if (prevState.type === 'loaded') {
@@ -687,13 +703,10 @@ export const ProfileProvider = ({ children }: { children: ReactNode }) => {
         setLogoUrl,
         setBackgroundUrl,
         setLogoShowContainer,
+        setShowEvidencePanel,
         setTheme,
         toggleTheme,
         setAccentColor,
-        showSpeechApiKey,
-        setShowSpeechApiKey,
-        showOpenAIApiKey,
-        setShowOpenAIApiKey,
       }}
     >
       {children}

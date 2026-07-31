@@ -1,11 +1,58 @@
 'use client';
 
 import { useRef, useEffect } from 'react';
+import type { AvatarConfig } from '@/types/avatar';
 
 // Avatar rendering constants
 const AVATAR_SCALE_FACTOR = 0.80; // Scale avatar to 80% of viewport height
 
-export function useGreenScreen() {
+export interface AvatarQuad {
+    x1: number;
+    x2: number;
+    y1: number;
+    y2: number;
+}
+
+export function calculateAvatarQuad(
+    videoAspect: number,
+    canvasAspect: number,
+    avatarType: AvatarConfig['avatarType'] = 'video'
+): AvatarQuad {
+    if (avatarType === 'photo') {
+        // Photo avatars are square head shots. Contain and center them instead of
+        // applying the full-body cover crop. Portrait screens can use more width.
+        const scale = canvasAspect < 1 ? 0.92 : 0.90;
+        let width: number;
+        let height: number;
+        if (videoAspect > canvasAspect) {
+            width = scale;
+            height = scale * canvasAspect / videoAspect;
+        } else {
+            height = scale;
+            width = scale * videoAspect / canvasAspect;
+        }
+        const verticalOffset = -0.08;
+        return { x1: -width, x2: width, y1: -height + verticalOffset, y2: height + verticalOffset };
+    }
+
+    let width = 1.0;
+    let height = 1.0;
+    if (videoAspect > canvasAspect) {
+        width = videoAspect / canvasAspect;
+    } else {
+        height = canvasAspect / videoAspect;
+    }
+    width *= AVATAR_SCALE_FACTOR;
+    height *= AVATAR_SCALE_FACTOR;
+    return {
+        x1: -width,
+        x2: width,
+        y1: -1.0,
+        y2: -1.0 + (height * 2.0),
+    };
+}
+
+export function useGreenScreen(avatarType: AvatarConfig['avatarType'] = 'video') {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const tmpCanvasRef = useRef<HTMLCanvasElement>(null); // Kept for compatibility, though not strictly needed for WebGL
     const rafRef = useRef<number | null>(null);
@@ -18,6 +65,7 @@ export function useGreenScreen() {
     const positionBufferRef = useRef<WebGLBuffer | null>(null);
     const texCoordBufferRef = useRef<WebGLBuffer | null>(null);
     const texStepLocationRef = useRef<WebGLUniformLocation | null>(null);
+    const photoModeLocationRef = useRef<WebGLUniformLocation | null>(null);
 
     const startProcessing = () => {
         if (processingRef.current) return;
@@ -68,6 +116,7 @@ export function useGreenScreen() {
             precision mediump float;
             uniform sampler2D u_image;
             uniform vec2 u_texStep; // texture texel size (1/width, 1/height)
+            uniform float u_photoMode;
             varying vec2 v_texCoord;
 
             vec3 rgb2hsv(vec3 c) {
@@ -100,8 +149,38 @@ export function useGreenScreen() {
                 return 1.0;
             }
 
+            float photoKeyConfidence(vec3 color) {
+                vec3 hsv = rgb2hsv(color);
+                float hueDist = abs(hsv.x - 0.333);
+                if (hueDist > 0.5) hueDist = 1.0 - hueDist;
+                float hueConfidence = 1.0 - smoothstep(0.055, 0.14, hueDist);
+                float saturationConfidence = smoothstep(0.16, 0.48, hsv.y);
+                float valueConfidence = smoothstep(0.06, 0.28, hsv.z);
+                float greenDominance = color.g - max(color.r, color.b);
+                float dominanceConfidence = smoothstep(0.015, 0.18, greenDominance);
+                return hueConfidence * saturationConfidence * valueConfidence * dominanceConfidence;
+            }
+
             void main() {
                 vec4 color = texture2D(u_image, v_texCoord);
+
+                if (u_photoMode > 0.5) {
+                    float center = photoKeyConfidence(color.rgb);
+                    float left = photoKeyConfidence(texture2D(u_image, v_texCoord - vec2(u_texStep.x, 0.0)).rgb);
+                    float right = photoKeyConfidence(texture2D(u_image, v_texCoord + vec2(u_texStep.x, 0.0)).rgb);
+                    float up = photoKeyConfidence(texture2D(u_image, v_texCoord + vec2(0.0, u_texStep.y)).rgb);
+                    float down = photoKeyConfidence(texture2D(u_image, v_texCoord - vec2(0.0, u_texStep.y)).rgb);
+                    float neighborConfidence = (left + right + up + down) * 0.25;
+                    float keyConfidence = mix(center, neighborConfidence, 0.28);
+                    float alpha = 1.0 - smoothstep(0.18, 0.72, keyConfidence);
+
+                    float greenExcess = max(color.g - max(color.r, color.b), 0.0);
+                    float despill = smoothstep(0.04, 0.65, keyConfidence) * 0.92;
+                    color.g -= greenExcess * despill;
+                    gl_FragColor = vec4(color.rgb, color.a * alpha);
+                    return;
+                }
+
                 vec3 hsv = rgb2hsv(color.rgb);
                 
                 float hue = hsv.x;
@@ -155,6 +234,7 @@ export function useGreenScreen() {
         // const texCoordLocation = gl.getAttribLocation(program, "a_texCoord"); // Unused
         const texStepLocation = gl.getUniformLocation(program, "u_texStep");
         texStepLocationRef.current = texStepLocation;
+        photoModeLocationRef.current = gl.getUniformLocation(program, "u_photoMode");
 
         // Provide texture coordinates for the rectangle.
         const texCoordBuffer = gl.createBuffer();
@@ -234,9 +314,14 @@ export function useGreenScreen() {
             return;
         }
 
-        // 1. Resize Canvas to window
-        const cw = window.innerWidth;
-        const ch = window.innerHeight;
+        // 1. Full-body avatars retain the viewport canvas. Photo avatars use
+        // their portrait card's actual dimensions and a sharper DPR-aware buffer.
+        const isPhoto = avatarType === 'photo';
+        const pixelRatio = isPhoto ? Math.min(window.devicePixelRatio || 1, 2) : 1;
+        const cssWidth = isPhoto ? (canvas.clientWidth || window.innerWidth) : window.innerWidth;
+        const cssHeight = isPhoto ? (canvas.clientHeight || window.innerHeight) : window.innerHeight;
+        const cw = Math.max(1, Math.round(cssWidth * pixelRatio));
+        const ch = Math.max(1, Math.round(cssHeight * pixelRatio));
         if (canvas.width !== cw || canvas.height !== ch) {
             canvas.width = cw;
             canvas.height = ch;
@@ -254,7 +339,7 @@ export function useGreenScreen() {
         // 4. Setup Program
         gl.useProgram(program);
 
-        // 5. Calculate Aspect Ratios for "Cover" Style with Scale
+        // 5. Calculate source and viewport aspect ratios.
         const vw = video.videoWidth || 1920;
         const vh = video.videoHeight || 1080;
         const videoAspect = vw / vh;
@@ -264,59 +349,17 @@ export function useGreenScreen() {
         if (texStepLocationRef.current) {
             gl.uniform2f(texStepLocationRef.current, 1.0 / vw, 1.0 / vh);
         }
-
-        // We want avatar at 80% height (AVATAR_SCALE_FACTOR)
-
-        // Apply Avatar Scale Factor hack? 
-        // The original efficient code did a complex drawImage. 
-        // For WebGL 'Cover':
-        // If we draw -1 to 1, we fill screen.
-        // We need to adjust Vertex Coordinates to maintain aspect ratio relative to viewport.
-
-        // Let's compute vertices in Normalized Device Coordinates (NDC)
-        // We want the video to be centered and cover the screen (or fit specific logic).
-        // The original logic: "Cover-style: fill the canvas, crop what doesn't fit" + AVATAR_SCALE_FACTOR.
-
-        // Actually, let's stick to standard "Cover" first for simplicity and full screen quality.
-        // If the user wants the avatar smaller (80%), we scale the quad down.
-
-        let width = 1.0;
-        let height = 1.0;
-
-        // StartWith: Fit Width or Fit Height to cover
-        if (videoAspect > canvasAspect) {
-            // Video is wider: Height is limiting factor for Coverage. 
-            // Scale width > 1.0
-            width = videoAspect / canvasAspect;
-        } else {
-            // Video is taller: Width is limiting
-            height = canvasAspect / videoAspect;
+        if (photoModeLocationRef.current) {
+            gl.uniform1f(photoModeLocationRef.current, isPhoto ? 1.0 : 0.0);
         }
 
-        // Apply scaling factor (make avatar smaller)
-        width *= AVATAR_SCALE_FACTOR;
-        height *= AVATAR_SCALE_FACTOR;
-
-        // Center at bottom: Move Y down
-        // 1.0 is top, -1.0 is bottom.
-        // Current quad is centered at 0,0 (height 2.0). 
-        // We want bottom of quad to be at -1.0.
-        // Current bottom is -height. Shift y by -1.0 - (-height) = height - 1.0? 
-        // No. Center is 0. Height is `height * 2` in NDC? No.
-        // Let's assume vertex array is -1 to 1.
-
-        // Let's construct vertices dynamically
-        const w = width; // NDC half-width effectively if we assume base is square? No. 
-        const h = height;
-
-        // Quad coords:
-        // Left: -w, Right: w
-        // Top: -1 + 2*h, Bottom: -1  (Anchor to bottom)
-
-        const x1 = -w;
-        const x2 = w;
-        const y1 = -1.0;
-        const y2 = -1.0 + (h * 2.0);
+        // Video avatars retain the existing cover/bottom anchor. Photo avatars
+        // use a centered contain policy so their square frames are never clipped.
+        const { x1, x2, y1, y2 } = calculateAvatarQuad(
+            videoAspect,
+            canvasAspect,
+            avatarType
+        );
 
         const vertices = new Float32Array([
             x1, y1,

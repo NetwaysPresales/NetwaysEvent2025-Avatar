@@ -48,6 +48,7 @@ model Profile {
   theme             String  @default("light") @db.VarChar(20)
   accentColor       Json?   @map("accent_color")
   logoShowContainer Boolean @default(true) @map("logo_show_container")
+  showEvidencePanel  Boolean @default(true) @map("show_evidence_panel")
 
   // Asset references (Blob Storage URLs)
   logoBlobUrl       String? @map("logo_blob_url") @db.VarChar(500)
@@ -70,10 +71,12 @@ model KnowledgeFile {
   profileId          String    @map("profile_id") @db.Uuid
   filename           String    @db.VarChar(255)
   blobUrl            String    @map("blob_url") @db.VarChar(500)
+  renderedPdfBlobUrl String?   @map("rendered_pdf_blob_url") @db.VarChar(500)
+  pageCount          Int?      @map("page_count")
   azureSearchIndexed Boolean   @default(false) @map("azure_search_indexed")
   chunkCount         Int       @default(0) @map("chunk_count")
   indexedAt          DateTime? @map("indexed_at") @db.Timestamptz(6)
-  embeddingModel     String    @default("text-embedding-ada-002") @map("embedding_model") @db.VarChar(50)
+  embeddingModel     String    @default("text-embedding-3-small") @map("embedding_model") @db.VarChar(50)
   uploadedAt         DateTime  @default(now()) @map("uploaded_at") @db.Timestamptz(6)
 
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)

@@ -1,101 +1,54 @@
-/**
- * Knowledge Files API Routes
- * 
- * GET: Fetch all knowledge files with content (for client-side caching)
- * POST: Upload a new knowledge file
- * DELETE: Delete a knowledge file
- */
-
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { getProfile } from '@/lib/profile-service';
 import { db } from '@/lib/db';
-import { downloadBlobAsText } from '@/lib/blob-storage';
-import { setCachedKnowledgeFiles, clearCachedKnowledgeFiles } from '@/lib/server-cache';
+import {
+  CONTAINERS,
+  convertKnowledgeDocumentToPdf,
+  deleteAsset,
+  extractPdfPages,
+  extractKnowledgeText,
+  uploadAsset,
+} from '@/lib/blob-storage';
+import {
+  chunkKnowledgeText,
+  deleteKnowledgeFileChunks,
+  indexKnowledgeFile,
+} from '@/lib/knowledge-search';
+
+const MAX_KNOWLEDGE_FILE_SIZE = 5 * 1024 * 1024;
+const ALLOWED_EXTENSIONS = new Set(['pdf', 'docx', 'txt', 'md', 'json']);
 
 export async function GET(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await requireAuth();
     const { id } = await params;
-
-    // Verify ownership
-    const profile = await getProfile(session.userId, id);
-    if (!profile) {
+    if (!await getProfile(session.userId, id)) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
-    // Get all knowledge files for this profile
     const knowledgeFiles = await db.knowledgeFile.findMany({
-      where: {
-        userId: session.userId,
-        profileId: id,
-      },
-      orderBy: {
-        uploadedAt: 'asc',
-      },
+      where: { userId: session.userId, profileId: id },
+      orderBy: { uploadedAt: 'asc' },
     });
 
-    if (knowledgeFiles.length === 0) {
-      return NextResponse.json({ files: [] });
-    }
-
-    // Download content for each file
-    const filesWithContent = await Promise.all(
-      knowledgeFiles.map(async (file) => {
-        try {
-          const content = await downloadBlobAsText(file.blobUrl);
-          
-          // Format JSON files nicely
-          let formattedContent = content;
-          if (file.filename.endsWith('.json')) {
-            try {
-              const parsed = JSON.parse(content);
-              formattedContent = JSON.stringify(parsed, null, 2);
-            } catch {
-              // If parsing fails, use raw content
-            }
-          }
-
-          return {
-            id: file.id,
-            filename: file.filename,
-            content: formattedContent,
-            uploadedAt: file.uploadedAt.toISOString(),
-          };
-        } catch (error) {
-          console.error(`[API] Failed to download knowledge file ${file.filename}:`, error);
-          return {
-            id: file.id,
-            filename: file.filename,
-            content: '',
-            uploadedAt: file.uploadedAt.toISOString(),
-            error: 'Failed to load content',
-          };
-        }
-      })
-    );
-
-    // Populate server-side cache for agent route
-    const filesForCache = filesWithContent
-      .filter(f => !f.error)
-      .map(f => ({ filename: f.filename, content: f.content }));
-    
-    // Calculate max uploadedAt timestamp
-    const maxUploadedAt = knowledgeFiles.length > 0
-      ? Math.max(...knowledgeFiles.map(f => f.uploadedAt.getTime()))
-      : 0;
-    
-    if (filesForCache.length > 0) {
-      setCachedKnowledgeFiles(session.userId, id, filesForCache, maxUploadedAt);
-    }
-
-    return NextResponse.json({ files: filesWithContent });
+    return NextResponse.json({
+      files: knowledgeFiles.map((file) => ({
+        id: file.id,
+        filename: file.filename,
+        indexed: file.azureSearchIndexed,
+        chunkCount: file.chunkCount,
+        pageCount: file.pageCount,
+        visualizable: Boolean(file.renderedPdfBlobUrl),
+        indexedAt: file.indexedAt?.toISOString() || null,
+        uploadedAt: file.uploadedAt.toISOString(),
+      })),
+    });
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    if (errorMessage === 'Unauthorized') {
+    if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('[API] Knowledge fetch error:', error);
@@ -103,10 +56,6 @@ export async function GET(
   }
 }
 
-/**
- * DELETE /api/profiles/[id]/knowledge
- * Delete a knowledge file and invalidate cache
- */
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -115,52 +64,36 @@ export async function DELETE(
     const session = await requireAuth();
     const { id } = await params;
     const { searchParams } = new URL(req.url);
+    const fileId = searchParams.get('fileId');
     const filename = searchParams.get('filename');
-
-    if (!filename) {
-      return NextResponse.json({ error: 'filename parameter is required' }, { status: 400 });
+    if (!fileId && !filename) {
+      return NextResponse.json({ error: 'fileId parameter is required' }, { status: 400 });
     }
-
-    // Verify ownership
-    const profile = await getProfile(session.userId, id);
-    if (!profile) {
+    if (!await getProfile(session.userId, id)) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
-    // Find and delete the knowledge file
     const knowledgeFile = await db.knowledgeFile.findFirst({
       where: {
         userId: session.userId,
         profileId: id,
-        filename: filename,
+        ...(fileId ? { id: fileId } : { filename: filename! }),
       },
     });
-
     if (!knowledgeFile) {
       return NextResponse.json({ error: 'Knowledge file not found' }, { status: 404 });
     }
 
-    // Delete from blob storage
-    const { deleteAsset } = await import('@/lib/blob-storage');
-    try {
-      await deleteAsset(knowledgeFile.blobUrl);
-    } catch (error) {
-      console.error(`[API] Failed to delete blob for ${filename}:`, error);
-      // Continue with database deletion even if blob deletion fails
+    await deleteKnowledgeFileChunks(knowledgeFile.id);
+    if (knowledgeFile.renderedPdfBlobUrl) {
+      await deleteAsset(knowledgeFile.renderedPdfBlobUrl);
     }
-
-    // Delete from database
-    await db.knowledgeFile.delete({
-      where: { id: knowledgeFile.id },
-    });
-
-    // Invalidate server-side cache
-    clearCachedKnowledgeFiles(session.userId, id);
+    await deleteAsset(knowledgeFile.blobUrl);
+    await db.knowledgeFile.delete({ where: { id: knowledgeFile.id } });
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    if (errorMessage === 'Unauthorized') {
+    if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('[API] Knowledge delete error:', error);
@@ -168,10 +101,6 @@ export async function DELETE(
   }
 }
 
-/**
- * POST /api/profiles/[id]/knowledge
- * Upload a new knowledge file and invalidate cache
- */
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -179,62 +108,133 @@ export async function POST(
   try {
     const session = await requireAuth();
     const { id } = await params;
-
-    // Verify ownership
-    const profile = await getProfile(session.userId, id);
-    if (!profile) {
+    if (!await getProfile(session.userId, id)) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
     const formData = await req.formData();
-    const file = formData.get('file') as File;
-
-    if (!file) {
+    const file = formData.get('file');
+    if (!(file instanceof File)) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
-    // Upload to blob storage
-    const { uploadAsset, CONTAINERS } = await import('@/lib/blob-storage');
-    const blobUrl = await uploadAsset(Buffer.from(await file.arrayBuffer()), {
+    const filename = file.name.trim();
+    const extension = filename.split('.').pop()?.toLowerCase() || '';
+    if (!filename || !ALLOWED_EXTENSIONS.has(extension)) {
+      return NextResponse.json(
+        { error: 'Supported file types are PDF, DOCX, TXT, Markdown, and JSON' },
+        { status: 400 }
+      );
+    }
+    if (file.size <= 0 || file.size > MAX_KNOWLEDGE_FILE_SIZE) {
+      return NextResponse.json(
+        { error: 'Knowledge files must be between 1 byte and 5 MB' },
+        { status: 400 }
+      );
+    }
+
+    const buffer = Buffer.from(await file.arrayBuffer());
+    let content: string;
+    let pdfBuffer: Buffer | null = null;
+    let pages: Array<{ pageNumber: number; content: string }> | undefined;
+    try {
+      pdfBuffer = await convertKnowledgeDocumentToPdf(buffer, filename);
+      if (pdfBuffer) {
+        pages = await extractPdfPages(pdfBuffer);
+        content = pages.map((page) => page.content).join('\n\n');
+      } else {
+        content = await extractKnowledgeText(buffer, filename);
+      }
+      chunkKnowledgeText(content);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Text extraction failed';
+      return NextResponse.json({ error: message }, { status: 422 });
+    }
+
+    const blobUrl = await uploadAsset(buffer, {
       userId: session.userId,
       profileId: id,
-      filename: file.name,
+      filename,
       contentType: file.type || 'application/octet-stream',
       container: CONTAINERS.KNOWLEDGE_FILES,
     });
-
-    if (!blobUrl) {
-      return NextResponse.json({ error: 'Failed to upload file to blob storage' }, { status: 500 });
+    let renderedPdfBlobUrl: string | null = null;
+    if (pdfBuffer) {
+      const pdfFilename = `${filename.replace(/\.[^.]+$/, '')}.rendered.pdf`;
+      try {
+        renderedPdfBlobUrl = await uploadAsset(pdfBuffer, {
+          userId: session.userId,
+          profileId: id,
+          filename: pdfFilename,
+          contentType: 'application/pdf',
+          container: CONTAINERS.KNOWLEDGE_FILES,
+        });
+      } catch (error) {
+        await deleteAsset(blobUrl).catch(() => undefined);
+        throw error;
+      }
     }
 
-    // Validate required fields before creating
-    if (!file.name || !file.name.trim()) {
-      return NextResponse.json({ error: 'Filename is required' }, { status: 400 });
+    let knowledgeFile;
+    try {
+      knowledgeFile = await db.knowledgeFile.create({
+        data: {
+          userId: session.userId,
+          profileId: id,
+          filename,
+          blobUrl,
+          renderedPdfBlobUrl,
+          pageCount: pages?.length || null,
+          azureSearchIndexed: false,
+          chunkCount: 0,
+          embeddingModel: 'text-embedding-3-small',
+        },
+      });
+    } catch (error) {
+      await deleteAsset(blobUrl).catch(() => undefined);
+      if (renderedPdfBlobUrl) await deleteAsset(renderedPdfBlobUrl).catch(() => undefined);
+      throw error;
     }
 
-    // Save to database
-    const knowledgeFile = await db.knowledgeFile.create({
-      data: {
+    try {
+      const chunkCount = await indexKnowledgeFile({
+        knowledgeFileId: knowledgeFile.id,
         userId: session.userId,
         profileId: id,
-        filename: file.name.trim(),
-        blobUrl: blobUrl,
-        azureSearchIndexed: false,
-        chunkCount: 0,
-      },
-    });
-
-    // Invalidate server-side cache when new file is uploaded
-    clearCachedKnowledgeFiles(session.userId, id);
+        filename,
+        content,
+        pages,
+        uploadedAt: knowledgeFile.uploadedAt,
+      });
+      knowledgeFile = await db.knowledgeFile.update({
+        where: { id: knowledgeFile.id },
+        data: {
+          azureSearchIndexed: true,
+          chunkCount,
+          indexedAt: new Date(),
+          embeddingModel: 'text-embedding-3-small',
+        },
+      });
+    } catch (error) {
+      console.error(`[API] Failed to index knowledge file ${knowledgeFile.id}:`, error);
+      return NextResponse.json({
+        success: true,
+        indexed: false,
+        filename: knowledgeFile.filename,
+        id: knowledgeFile.id,
+        warning: 'The file was stored but indexing failed. Run the reindex command to retry.',
+      }, { status: 202 });
+    }
 
     return NextResponse.json({
       success: true,
+      indexed: true,
+      chunkCount: knowledgeFile.chunkCount,
       filename: knowledgeFile.filename,
       id: knowledgeFile.id,
     });
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    if (errorMessage === 'Unauthorized') {
+    if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('[API] Knowledge upload error:', error);

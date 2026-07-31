@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as SpeechSDK from 'microsoft-cognitiveservices-speech-sdk';
 import type { AvatarConfig, SpeechConfig, TTSConfig, SessionState, AvatarEventData } from '@/types/avatar';
-import { fetchICEServerCredentials, createPeerConnection, setupTransceivers, createDataChannel } from '@/lib/webrtc';
+import { fetchSpeechSessionCredentials, createPeerConnection, setupTransceivers, createDataChannel } from '@/lib/webrtc';
 import { createSSML } from '@/lib/ssml';
+import { normalizeAvatarConfig } from '@/lib/avatar-catalog';
 
 interface UseAvatarSessionProps {
   speechConfig: SpeechConfig;
@@ -38,6 +39,7 @@ export function useAvatarSession({
   const lastInteractionRef = useRef<Date>(new Date());
   const isReconnectingRef = useRef<boolean>(false);
   const sessionActiveRef = useRef<boolean>(false);
+  const connectionAttemptIdRef = useRef<number>(0);
 
   // Update state and notify parent
   const updateState = useCallback((newState: SessionState) => {
@@ -50,16 +52,16 @@ export function useAvatarSession({
 
   // Start avatar session
   const startSession = useCallback(async () => {
+    const attemptId = ++connectionAttemptIdRef.current;
+
     try {
       updateState('connecting');
       setError(null);
+      const effectiveAvatarConfig = normalizeAvatarConfig(avatarConfig);
 
-      // Fetch ICE server credentials
-      const iceServerConfig = await fetchICEServerCredentials(
-        speechConfig.region,
-        speechConfig.apiKey,
-        speechConfig.enablePrivateEndpoint ? speechConfig.privateEndpoint : undefined
-      );
+      const speechCredentials = await fetchSpeechSessionCredentials(speechConfig);
+      const iceServerConfig = speechCredentials.ice;
+      if (attemptId !== connectionAttemptIdRef.current) return;
 
       // Create peer connection
       const peerConnection = createPeerConnection(iceServerConfig);
@@ -155,16 +157,21 @@ export function useAvatarSession({
 
       // Create Speech SDK config
       let sdkSpeechConfig: SpeechSDK.SpeechConfig;
-      if (speechConfig.enablePrivateEndpoint && speechConfig.privateEndpoint) {
+      if (speechConfig.enablePrivateEndpoint && speechConfig.privateEndpoint && speechCredentials.apiKey) {
         const endpoint = speechConfig.privateEndpoint.replace(/^https?:\/\//, '');
         sdkSpeechConfig = SpeechSDK.SpeechConfig.fromEndpoint(
           new URL(`wss://${endpoint}/tts/cognitiveservices/websocket/v1?enableTalkingAvatar=true`),
-          speechConfig.apiKey
+          speechCredentials.apiKey
+        );
+      } else if (speechCredentials.authorizationToken) {
+        sdkSpeechConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(
+          speechCredentials.authorizationToken,
+          speechCredentials.region
         );
       } else {
         sdkSpeechConfig = SpeechSDK.SpeechConfig.fromSubscription(
-          speechConfig.apiKey,
-          speechConfig.region
+          speechCredentials.apiKey || '',
+          speechCredentials.region
         );
       }
 
@@ -178,7 +185,7 @@ export function useAvatarSession({
       // Note: Bitrate is controlled by Azure backend and cannot be set via SDK
       // Video quality is determined by the service based on available bandwidth
 
-      if (avatarConfig.videoCrop) {
+      if (effectiveAvatarConfig.videoCrop && effectiveAvatarConfig.avatarType !== 'photo') {
         videoFormat.setCropRange(
           new SpeechSDK.Coordinate(600, 0),
           new SpeechSDK.Coordinate(1320, 1080)
@@ -187,12 +194,15 @@ export function useAvatarSession({
 
       // Create avatar config
       const sdkAvatarConfig = new SpeechSDK.AvatarConfig(
-        avatarConfig.character,
-        avatarConfig.style,
+        effectiveAvatarConfig.character,
+        effectiveAvatarConfig.style,
         videoFormat
       );
-      sdkAvatarConfig.customized = avatarConfig.customized;
-      sdkAvatarConfig.useBuiltInVoice = avatarConfig.useBuiltInVoice;
+      sdkAvatarConfig.customized = effectiveAvatarConfig.customized;
+      sdkAvatarConfig.useBuiltInVoice = effectiveAvatarConfig.useBuiltInVoice;
+      if (effectiveAvatarConfig.avatarType === 'photo') {
+        sdkAvatarConfig.photoAvatarBaseModel = effectiveAvatarConfig.photoAvatarBaseModel || 'vasa-1';
+      }
       // Always use green screen for background removal (include alpha)
       sdkAvatarConfig.backgroundColor = '#00FF00FF';
 
@@ -214,6 +224,12 @@ export function useAvatarSession({
 
       // Start avatar
       const result = await avatarSynthesizer.startAvatarAsync(peerConnection);
+      if (attemptId !== connectionAttemptIdRef.current) {
+        // Component unmounted while waiting for Azure to connect
+        avatarSynthesizer.close();
+        peerConnection.close();
+        return;
+      }
 
       if (result.reason === SpeechSDK.ResultReason.SynthesizingAudioCompleted) {
         lastInteractionRef.current = new Date();
@@ -247,6 +263,7 @@ export function useAvatarSession({
 
   // Stop avatar session
   const stopSession = useCallback(() => {
+    connectionAttemptIdRef.current++;
     sessionActiveRef.current = false;
     if (avatarSynthesizerRef.current) {
       avatarSynthesizerRef.current.close();
@@ -264,12 +281,14 @@ export function useAvatarSession({
 
   // Speak text
   const speak = useCallback(async (text: string, endingSilenceMs: number = 0) => {
-    if (!avatarSynthesizerRef.current || state !== 'connected') {
+    if (!avatarSynthesizerRef.current || !sessionActiveRef.current) {
       console.warn('Cannot speak: session not connected');
       return;
     }
 
-    if (isSpeaking) {
+    // The ref changes synchronously and avoids stale React-state races when the
+    // LLM emits several complete sentences in the same stream chunk.
+    if (currentSpeechRef.current) {
       speechQueueRef.current.push(text);
       return;
     }
@@ -300,11 +319,18 @@ export function useAvatarSession({
       }
 
     } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      if (errMsg.includes('canceled by user')) {
+        // Expected consequence of handleInterrupt -> stopSpeaking
+        setIsSpeaking(false);
+        updateState('connected');
+        return;
+      }
       console.error('Error speaking:', err);
       setIsSpeaking(false);
       updateState('connected');
     }
-  }, [state, isSpeaking, ttsConfig, updateState]);
+  }, [ttsConfig, updateState]);
 
   // Stop speaking
   const stopSpeaking = useCallback(async () => {

@@ -1,28 +1,28 @@
-# Azure Web App Deployment Script
-# Replace the variables below with your actual values
-
-$resourceGroup = "Avatar-RG"  # Replace with your resource group
-$appName = "avatar-web-app"                    # Replace with your app name
-
-Write-Host "🚀 Starting deployment to Azure Web App..." -ForegroundColor Cyan
-
-# Step 1: Create deployment package (source + config only)
-Write-Host "📦 Creating deployment package (source only, no node_modules)..." -ForegroundColor Yellow
-
-# Include only app source and config. App Service startup command will run npm install/build.
-$filesToInclude = @(
-    "src",
-    "public",
-    "prisma",
-    "prisma.config.js",
-    "package.json",
-    "package-lock.json",
-    "next.config.ts",
-    "tsconfig.json",
-    "postcss.config.mjs",
-    "eslint.config.mjs",
-    "middleware.ts"
+param(
+    [string]$ResourceGroup = "rg-netways-avatar-dev",
+    [string]$AppName = "app-ntw-avatar-ade1b8"
 )
+
+$ErrorActionPreference = "Stop"
+
+Write-Host "Starting deployment to Azure Web App..." -ForegroundColor Cyan
+
+Write-Host "Building standalone Next.js artifact..." -ForegroundColor Yellow
+npm run build
+if ($LASTEXITCODE -ne 0) {
+    throw "Next.js build failed."
+}
+
+$stagingPath = ".deployment"
+if (Test-Path $stagingPath) {
+    Remove-Item $stagingPath -Recurse -Force
+}
+
+New-Item -ItemType Directory -Path $stagingPath | Out-Null
+Copy-Item ".next/standalone/*" $stagingPath -Recurse -Force
+New-Item -ItemType Directory -Path "$stagingPath/.next" -Force | Out-Null
+Copy-Item ".next/static" "$stagingPath/.next/static" -Recurse -Force
+Copy-Item "public" "$stagingPath/public" -Recurse -Force
 
 # Remove existing zip if present
 if (Test-Path "deploy.zip") {
@@ -30,27 +30,25 @@ if (Test-Path "deploy.zip") {
 }
 
 # Create zip (PowerShell 5.1+)
-Compress-Archive -Path $filesToInclude -DestinationPath deploy.zip -Force
+Compress-Archive -Path "$stagingPath/*" -DestinationPath deploy.zip -Force
+Remove-Item $stagingPath -Recurse -Force
 
-Write-Host "✅ Deployment package created" -ForegroundColor Green
+Write-Host "Deployment package created" -ForegroundColor Green
 
 # Step 3: Deploy to Azure
-Write-Host "🚀 Deploying to Azure..." -ForegroundColor Yellow
-az webapp deployment source config-zip `
-    --resource-group $resourceGroup `
-    --name $appName `
-    --src deploy.zip
+Write-Host "Deploying to Azure..." -ForegroundColor Yellow
+az webapp deploy `
+    --resource-group $ResourceGroup `
+    --name $AppName `
+    --src-path deploy.zip `
+    --type zip `
+    --async true
 
 if ($LASTEXITCODE -eq 0) {
-    Write-Host "✅ Deployment successful!" -ForegroundColor Green
-    Write-Host "🌐 Your app should be available at: https://$appName.azurewebsites.net" -ForegroundColor Cyan
-    
-    Write-Host "`n⚠️  IMPORTANT: Don't forget to:" -ForegroundColor Yellow
-    Write-Host "   1. Set all environment variables in Azure Portal" -ForegroundColor Yellow
-    Write-Host "   2. Run database migrations: az webapp ssh --resource-group $resourceGroup --name $appName" -ForegroundColor Yellow
-    Write-Host "   3. Enable 'Always On' and 'Web Sockets' in Configuration" -ForegroundColor Yellow
+    Write-Host "Deployment accepted. App Service will restart when extraction completes." -ForegroundColor Green
+    Write-Host "Application URL: https://$AppName.azurewebsites.net" -ForegroundColor Cyan
 } else {
-    Write-Host "❌ Deployment failed!" -ForegroundColor Red
+    Write-Host "Deployment failed." -ForegroundColor Red
     exit 1
 }
 

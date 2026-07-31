@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { getProfile, updateProfile, deleteProfile } from '@/lib/profile-service';
 import { validateSpeechConfig, validateAzureOpenAIConfig } from '@/lib/config';
+import { normalizeAvatarConfig } from '@/lib/avatar-catalog';
 
 /**
  * GET /api/profiles/[id]
@@ -67,7 +68,7 @@ export async function PUT(
         // Update profile using profile service (handles ownership verification)
         const profile = await updateProfile(session.userId, id, {
             name: body.name,
-            avatarConfig: body.avatarConfig,
+            avatarConfig: body.avatarConfig ? normalizeAvatarConfig(body.avatarConfig) : undefined,
             speechConfig: body.speechConfig,
             ttsConfig: body.ttsConfig,
             openaiConfig: openaiConfig, // Use the normalized value
@@ -77,6 +78,7 @@ export async function PUT(
             theme: body.theme,
             accentColor: body.accentColor,
             logoShowContainer: body.logoShowContainer,
+            showEvidencePanel: body.showEvidencePanel,
         });
 
         return NextResponse.json({ profile });

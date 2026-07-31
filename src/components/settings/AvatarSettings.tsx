@@ -1,13 +1,13 @@
-/**
- * Avatar Settings Component
- * 
- * Handles avatar configuration (character, style, etc.)
- */
-
 'use client';
 
-import React from 'react';
-import { Select } from '@/components/ui';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  AZURE_AVATAR_CHARACTERS,
+  findAvatarCharacter,
+  getAvatarPreview,
+  normalizeAvatarConfig,
+  type AvatarCharacterOption,
+} from '@/lib/avatar-catalog';
 import type { AvatarConfig } from '@/types/avatar';
 
 interface AvatarSettingsProps {
@@ -15,171 +15,220 @@ interface AvatarSettingsProps {
   onChange: (config: AvatarConfig) => void;
 }
 
-// Azure Avatar Service standard video avatars
-// Based on Azure's official standard video avatars
-// Reference: https://learn.microsoft.com/en-us/azure/ai-services/speech-service/text-to-speech-avatar/standard-avatars
-interface AvatarCharacter {
-  value: string;
-  label: string;
-  styles: { value: string; label: string }[];
+function AvatarPreviewImage({ src, alt }: { src: string; alt: string }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [src]);
+
+  if (failed) {
+    return (
+      <div className="flex aspect-square w-full items-center justify-center bg-[var(--bg-tertiary)] text-xl font-semibold text-[var(--text-tertiary)]">
+        {alt.charAt(0)}
+      </div>
+    );
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={alt}
+      className="aspect-square w-full object-cover object-top transition group-hover:scale-[1.02]"
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      onError={() => setFailed(true)}
+    />
+  );
 }
 
-const AZURE_AVATAR_CHARACTERS: AvatarCharacter[] = [
-  {
-    value: 'harry',
-    label: 'Harry',
-    styles: [
-      { value: 'business', label: 'Business' },
-      { value: 'casual', label: 'Casual' },
-      { value: 'youthful', label: 'Youthful' },
-    ],
-  },
-  {
-    value: 'jeff',
-    label: 'Jeff',
-    styles: [
-      { value: 'business', label: 'Business' },
-      { value: 'formal', label: 'Formal' },
-    ],
-  },
-  {
-    value: 'lisa',
-    label: 'Lisa',
-    styles: [
-      { value: 'casual-sitting', label: 'Casual Sitting' },
-      { value: 'graceful-sitting', label: 'Graceful Sitting' },
-      { value: 'graceful-standing', label: 'Graceful Standing' },
-      { value: 'technical-sitting', label: 'Technical Sitting' },
-      { value: 'technical-standing', label: 'Technical Standing' },
-    ],
-  },
-  {
-    value: 'lori',
-    label: 'Lori',
-    styles: [
-      { value: 'casual', label: 'Casual' },
-      { value: 'graceful', label: 'Graceful' },
-      { value: 'formal', label: 'Formal' },
-    ],
-  },
-  {
-    value: 'max',
-    label: 'Max',
-    styles: [
-      { value: 'business', label: 'Business' },
-      { value: 'casual', label: 'Casual' },
-      { value: 'formal', label: 'Formal' },
-    ],
-  },
-  {
-    value: 'meg',
-    label: 'Meg',
-    styles: [
-      { value: 'formal', label: 'Formal' },
-      { value: 'casual', label: 'Casual' },
-      { value: 'business', label: 'Business' },
-    ],
-  },
-];
+export const AvatarSettings: React.FC<AvatarSettingsProps> = ({ config, onChange }) => {
+  const normalizedConfig = normalizeAvatarConfig(config);
+  const selectedCharacter = findAvatarCharacter(normalizedConfig.character);
+  const [catalogType, setCatalogType] = useState<'video' | 'photo'>(selectedCharacter?.type || 'video');
+  const [search, setSearch] = useState('');
 
-export const AvatarSettings: React.FC<AvatarSettingsProps> = ({
-  config,
-  onChange,
-}) => {
-  // Case-insensitive character matching
-  const selectedCharacter = AZURE_AVATAR_CHARACTERS.find(
-    (char) => char.value.toLowerCase() === (config.character || '').toLowerCase()
-  );
-
-  const characterOptions = AZURE_AVATAR_CHARACTERS.map((char) => ({
-    value: char.value,
-    label: char.label,
-  }));
-
-  const styleOptions = selectedCharacter
-    ? selectedCharacter.styles.map((style) => ({
-        value: style.value,
-        label: style.label,
-      }))
-    : [];
-
-  // Ensure style is valid for the selected character
-  const currentStyle = config.style || '';
-  const isValidStyle = selectedCharacter?.styles.some(
-    (s) => s.value === currentStyle
-  );
-  const effectiveStyle = isValidStyle ? currentStyle : (selectedCharacter?.styles[0]?.value || '');
-
-  // Auto-fix invalid style if character is selected but style is invalid
-  React.useEffect(() => {
-    if (selectedCharacter && !isValidStyle && effectiveStyle && effectiveStyle !== currentStyle) {
-      onChange({
-        ...config,
-        style: effectiveStyle,
-      });
+  useEffect(() => {
+    if (!config.customized && (
+      config.character !== normalizedConfig.character
+      || config.style !== normalizedConfig.style
+      || config.avatarType !== normalizedConfig.avatarType
+      || config.photoAvatarBaseModel !== normalizedConfig.photoAvatarBaseModel
+      || config.videoCrop !== normalizedConfig.videoCrop
+    )) {
+      onChange(normalizedConfig);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCharacter?.value, currentStyle]);
+  }, [
+    config.avatarType,
+    config.character,
+    config.customized,
+    config.photoAvatarBaseModel,
+    config.style,
+    config.videoCrop,
+    normalizedConfig,
+    onChange,
+  ]);
 
-  const handleCharacterChange = (characterValue: string) => {
-    const newCharacter = AZURE_AVATAR_CHARACTERS.find(
-      (char) => char.value === characterValue
-    );
-    // Reset style when character changes, or keep it if it's still valid
-    const newStyle = newCharacter?.styles.find(
-      (s) => s.value === config.style
-    )
-      ? config.style
-      : newCharacter?.styles[0]?.value || '';
-    
-    onChange({
+  const visibleCharacters = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return AZURE_AVATAR_CHARACTERS.filter((character) => (
+      character.type === catalogType
+      && (!query || character.label.toLowerCase().includes(query))
+    ));
+  }, [catalogType, search]);
+
+  const selectCharacter = (character: AvatarCharacterOption) => {
+    if (character.selectable === false) return;
+    onChange(normalizeAvatarConfig({
       ...config,
-      character: characterValue,
-      style: newStyle,
-    });
+      customized: false,
+      character: character.value,
+      style: character.styles[0]?.value || '',
+      avatarType: character.type,
+      photoAvatarBaseModel: character.type === 'photo' ? 'vasa-1' : undefined,
+    }));
+  };
+
+  const selectStyle = (style: string) => {
+    onChange(normalizeAvatarConfig({ ...config, style }));
   };
 
   return (
-    <div className="space-y-6">
-      <h3 className="text-sm font-medium text-[var(--accent-primary)] uppercase tracking-wider mb-4">
-        Avatar Configuration
-      </h3>
+    <div className="space-y-5">
+      <div>
+        <h3 className="text-sm font-medium uppercase tracking-wider text-[var(--accent-primary)]">
+          Avatar
+        </h3>
+        <p className="mt-1 text-sm text-[var(--text-tertiary)]">
+          Select directly from the current Microsoft real-time avatar catalog.
+        </p>
+      </div>
 
-      <div className="space-y-4">
-        <Select
-          label="Character"
-          value={config.character}
-          onChange={(e) => handleCharacterChange(e.target.value)}
-          options={characterOptions}
-          helperText="Select an Azure Avatar Service character"
-        />
-
-        <Select
-          label="Style"
-          value={effectiveStyle}
-          onChange={(e) => onChange({ ...config, style: e.target.value })}
-          options={styleOptions}
-          helperText={
-            selectedCharacter
-              ? `Select a style for ${selectedCharacter.label}`
-              : 'Select a character first'
-          }
-          disabled={!selectedCharacter || styleOptions.length === 0}
-        />
-
-        <div className="flex items-center gap-4">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={config.customized || false}
-              onChange={(e) => onChange({ ...config, customized: e.target.checked })}
-              className="w-4 h-4 rounded border-[var(--border-color)] text-[var(--accent-primary)] focus:ring-[var(--accent-focus-ring)]"
-            />
-            <span className="text-sm text-[var(--text-secondary)]">Customized</span>
-          </label>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="inline-flex shrink-0 rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] p-1">
+          {(['video', 'photo'] as const).map((type) => (
+            <button
+              key={type}
+              type="button"
+              onClick={() => setCatalogType(type)}
+              className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
+                catalogType === type
+                  ? 'bg-[var(--accent-primary)] text-white'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              {type === 'video' ? 'Full Body' : 'Talking Heads'}
+            </button>
+          ))}
         </div>
+        <input
+          type="search"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Find avatar"
+          aria-label="Find avatar"
+          className="min-w-0 flex-1 rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] px-3 py-2 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)]"
+        />
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
+        {visibleCharacters.map((character) => {
+          const selected = character.value === selectedCharacter?.value;
+          const disabled = character.selectable === false;
+          const image = selected
+            ? getAvatarPreview(character, normalizedConfig.style)
+            : character.previewUrl;
+          return (
+            <button
+              key={character.value}
+              type="button"
+              disabled={disabled}
+              onClick={() => selectCharacter(character)}
+              aria-pressed={selected}
+              title={character.notice}
+              className={`group relative overflow-hidden rounded-lg border text-left transition ${
+                selected
+                  ? 'border-[var(--accent-primary)] ring-2 ring-[var(--accent-focus-ring)]'
+                  : 'border-[var(--border-color)] hover:border-[var(--text-tertiary)]'
+              } ${disabled ? 'cursor-not-allowed opacity-55' : ''}`}
+            >
+              <AvatarPreviewImage src={image} alt={`${character.label} avatar preview`} />
+              <div className="flex items-center justify-between gap-1 bg-[var(--bg-secondary)] px-2 py-1.5">
+                <span className="truncate text-xs font-medium text-[var(--text-secondary)]">{character.label}</span>
+                {disabled && (
+                  <span className="text-[8px] uppercase tracking-wider text-[var(--text-tertiary)]">Pending</span>
+                )}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {visibleCharacters.length === 0 && (
+        <div className="rounded-xl border border-dashed border-[var(--border-color)] py-10 text-center text-sm text-[var(--text-tertiary)]">
+          No avatars match this search.
+        </div>
+      )}
+
+      {selectedCharacter?.type === 'video' && (
+        <div>
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <div className="text-xs font-medium uppercase tracking-wider text-[var(--text-tertiary)]">
+              {selectedCharacter.label} Style
+            </div>
+            {selectedCharacter.notice && (
+              <div className="text-right text-[10px] text-amber-500">{selectedCharacter.notice}</div>
+            )}
+          </div>
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+            {selectedCharacter.styles.map((style) => {
+              const selected = style.value === normalizedConfig.style;
+              return (
+                <button
+                  key={style.value}
+                  type="button"
+                  onClick={() => selectStyle(style.value)}
+                  aria-pressed={selected}
+                  className={`group overflow-hidden rounded-lg border text-left transition ${
+                    selected
+                      ? 'border-[var(--accent-primary)] ring-2 ring-[var(--accent-focus-ring)]'
+                      : 'border-[var(--border-color)] hover:border-[var(--text-tertiary)]'
+                  }`}
+                >
+                  <AvatarPreviewImage src={style.previewUrl} alt={`${selectedCharacter.label} ${style.label} preview`} />
+                  <div className="truncate bg-[var(--bg-secondary)] px-2 py-1.5 text-xs text-[var(--text-secondary)]">
+                    {style.label}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {selectedCharacter?.type === 'photo' && (
+        <div className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] px-3 py-2.5 text-xs text-[var(--text-secondary)]">
+          {selectedCharacter.label} is a VASA-1 photo avatar preview and does not use a separate style.
+        </div>
+      )}
+
+      <div className="flex items-center justify-between gap-4 border-t border-[var(--border-color)] pt-4">
+        <label className="flex cursor-pointer items-center gap-2">
+          <input
+            type="checkbox"
+            checked={config.customized || false}
+            onChange={(event) => onChange({ ...config, customized: event.target.checked })}
+            className="h-4 w-4 rounded border-[var(--border-color)] text-[var(--accent-primary)] focus:ring-[var(--accent-focus-ring)]"
+          />
+          <span className="text-sm text-[var(--text-secondary)]">Customized avatar</span>
+        </label>
+        <a
+          href="https://learn.microsoft.com/azure/ai-services/speech-service/text-to-speech-avatar/standard-avatars"
+          target="_blank"
+          rel="noreferrer"
+          className="text-xs text-[var(--accent-primary)] hover:underline"
+        >
+          Microsoft catalog
+        </a>
       </div>
     </div>
   );
 };
-

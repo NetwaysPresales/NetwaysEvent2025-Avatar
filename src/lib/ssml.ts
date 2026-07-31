@@ -29,7 +29,14 @@ export function createSSML(
   endingSilenceMs: number = 0,
   ttsConfig?: TTSConfig
 ): string {
-  const encodedText = htmlEncode(text);
+  const encodedText = htmlEncode(text)
+    .replace(/,\s+/g, ",<break time='110ms'/>")
+    .replace(/;\s+/g, ";<break time='190ms'/>")
+    .replace(/:\s+/g, ":<break time='220ms'/>")
+    .replace(/\s+[—–]\s+/g, "<break time='220ms'/>");
+  const encodedVoice = htmlEncode(voice);
+  const localeMatch = voice.match(/^[a-z]{2}-[A-Z]{2}/);
+  const locale = localeMatch?.[0] || 'en-US';
   
   // Build prosody attributes from config
   let prosodyAttrs = '';
@@ -52,6 +59,6 @@ export function createSSML(
     ? `<break time='${endingSilenceMs}ms' />` 
     : '';
 
-  return `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts='http://www.w3.org/2001/mstts' xml:lang='en-US'><voice name='${voice}'><mstts:leadingsilence-exact value='0'/>${contentWithProsody}${silenceBreak}</voice></speak>`;
+  return `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts='http://www.w3.org/2001/mstts' xml:lang='${locale}'><voice name='${encodedVoice}'><mstts:leadingsilence-exact value='0'/>${contentWithProsody}${silenceBreak}</voice></speak>`;
 }
 

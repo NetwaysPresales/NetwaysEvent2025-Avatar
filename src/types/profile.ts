@@ -24,6 +24,7 @@ export interface Profile {
   theme: 'light' | 'dark';
   accentColor: AccentColor | null;
   logoShowContainer: boolean;
+  showEvidencePanel: boolean;
 
   // Asset references (Blob Storage URLs)
   logoBlobUrl: string | null;

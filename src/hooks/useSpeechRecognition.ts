@@ -3,19 +3,46 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as SpeechSDK from 'microsoft-cognitiveservices-speech-sdk';
 import type { SpeechConfig, STTConfig } from '@/types/avatar';
+import { fetchSpeechSessionCredentials } from '@/lib/webrtc';
+import { getLanguageDisplay } from '@/lib/language-display';
+
+export interface SpeechRecognitionUpdate {
+  text: string;
+  locale?: string;
+  languageLabel?: string;
+  detectionConfidence?: string;
+  recognizedAt: string;
+}
 
 interface UseSpeechRecognitionProps {
   speechConfig: SpeechConfig;
   sttConfig: STTConfig;
-  onRecognized?: (text: string) => void;
-  onRecognizing?: (text: string) => void;
+  onRecognized?: (update: SpeechRecognitionUpdate) => void;
+  onRecognizing?: (update: SpeechRecognitionUpdate) => void;
+  onListeningChange?: (listening: boolean) => void;
+}
+
+function resolveDetectedLocale(
+  text: string,
+  detectedLocale: string | undefined,
+  confidence: string | undefined,
+  configuredLocales: string[],
+  turnFallback: string | undefined
+): string {
+  const englishLocale = configuredLocales.find((locale) => locale.toLowerCase().startsWith('en')) || configuredLocales[0] || 'en-US';
+  const arabicLocale = configuredLocales.find((locale) => locale.toLowerCase().startsWith('ar'));
+  if (arabicLocale && /[\u0600-\u06FF]/u.test(text)) return arabicLocale;
+  if (/[A-Za-z]/.test(text) && detectedLocale?.toLowerCase().startsWith('ar')) return englishLocale;
+  if (confidence?.toLowerCase() === 'low') return turnFallback || englishLocale;
+  return detectedLocale || turnFallback || englishLocale;
 }
 
 export function useSpeechRecognition({
   speechConfig,
   sttConfig,
   onRecognized,
-  onRecognizing
+  onRecognizing,
+  onListeningChange,
 }: UseSpeechRecognitionProps) {
   const [isListening, setIsListening] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
@@ -24,6 +51,24 @@ export function useSpeechRecognition({
   const [error, setError] = useState<string | null>(null);
 
   const recognizerRef = useRef<SpeechSDK.SpeechRecognizer | null>(null);
+  const lastDetectedLocaleRef = useRef<string | undefined>(undefined);
+  const finalSegmentsRef = useRef<string[]>([]);
+  const finalMetadataRef = useRef<Omit<SpeechRecognitionUpdate, 'text' | 'recognizedAt'> | null>(null);
+
+  const flushRecognizedUtterance = useCallback(() => {
+    const text = finalSegmentsRef.current.join(' ').replace(/\s+/g, ' ').trim();
+    const metadata = finalMetadataRef.current;
+    finalSegmentsRef.current = [];
+    finalMetadataRef.current = null;
+    if (!text) return;
+    onRecognized?.({
+      text,
+      locale: metadata?.locale,
+      languageLabel: metadata?.languageLabel,
+      detectionConfidence: metadata?.detectionConfidence,
+      recognizedAt: new Date().toISOString(),
+    });
+  }, [onRecognized]);
 
   // Cleanup recognizer
   const cleanupRecognizer = useCallback(() => {
@@ -38,31 +83,31 @@ export function useSpeechRecognition({
   }, []);
 
   // Initialize recognizer
-  const initializeRecognizer = useCallback(() => {
+  const initializeRecognizer = useCallback(async () => {
     try {
       // Cleanup any existing recognizer first
       cleanupRecognizer();
 
       // Create speech config
+      const speechCredentials = await fetchSpeechSessionCredentials(speechConfig);
       let sdkSpeechConfig: SpeechSDK.SpeechConfig;
-      if (speechConfig.enablePrivateEndpoint && speechConfig.privateEndpoint) {
+      if (speechConfig.enablePrivateEndpoint && speechConfig.privateEndpoint && speechCredentials.apiKey) {
         const endpoint = speechConfig.privateEndpoint.replace(/^https?:\/\//, '');
         sdkSpeechConfig = SpeechSDK.SpeechConfig.fromEndpoint(
           new URL(`wss://${endpoint}/stt/speech/universal/v2`),
-          speechConfig.apiKey
+          speechCredentials.apiKey
+        );
+      } else if (speechCredentials.authorizationToken) {
+        sdkSpeechConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(
+          speechCredentials.authorizationToken,
+          speechCredentials.region
         );
       } else {
         sdkSpeechConfig = SpeechSDK.SpeechConfig.fromEndpoint(
-          new URL(`wss://${speechConfig.region}.stt.speech.microsoft.com/speech/universal/v2`),
-          speechConfig.apiKey
+          new URL(`wss://${speechCredentials.region}.stt.speech.microsoft.com/speech/universal/v2`),
+          speechCredentials.apiKey || ''
         );
       }
-
-      // Enable continuous language detection
-      sdkSpeechConfig.setProperty(
-        SpeechSDK.PropertyId.SpeechServiceConnection_LanguageIdMode,
-        'Continuous'
-      );
 
       // Apply advanced STT configurations
       if (sttConfig.profanityFilter) {
@@ -100,6 +145,13 @@ export function useSpeechRecognition({
       const locales = Array.isArray(sttConfig.locales) && sttConfig.locales.length > 0
         ? sttConfig.locales
         : ['en-US']; // Default fallback
+
+      // Azure DetectAudioAtStart accepts at most four candidate languages.
+      // Profiles with a wider multilingual set must use Continuous LID.
+      sdkSpeechConfig.setProperty(
+        SpeechSDK.PropertyId.SpeechServiceConnection_LanguageIdMode,
+        locales.length <= 4 ? 'AtStart' : 'Continuous'
+      );
       
       const autoDetectConfig = SpeechSDK.AutoDetectSourceLanguageConfig.fromLanguages(
         locales
@@ -121,39 +173,56 @@ export function useSpeechRecognition({
       recognizer.recognizing = (s, e) => {
         if (e.result.reason === SpeechSDK.ResultReason.RecognizingSpeech) {
           const text = e.result.text;
-          setInterimText(text);
-          onRecognizing?.(text);
+          const detection = SpeechSDK.AutoDetectSourceLanguageResult.fromResult(e.result);
+          const locale = resolveDetectedLocale(
+            text,
+            detection.language,
+            detection.languageDetectionConfidence,
+            locales,
+            lastDetectedLocaleRef.current
+          );
+          if (detection.languageDetectionConfidence?.toLowerCase() !== 'low') lastDetectedLocaleRef.current = locale;
+          const accumulatedText = [...finalSegmentsRef.current, text].join(' ').trim();
+          setInterimText(accumulatedText);
+          onRecognizing?.({
+            text: accumulatedText,
+            locale,
+            languageLabel: getLanguageDisplay(locale),
+            detectionConfidence: detection.languageDetectionConfidence,
+            recognizedAt: new Date().toISOString(),
+          });
         }
       };
 
       recognizer.recognized = (s, e) => {
         if (e.result.reason === SpeechSDK.ResultReason.RecognizedSpeech) {
           const text = e.result.text.trim();
+          const detection = SpeechSDK.AutoDetectSourceLanguageResult.fromResult(e.result);
+          const locale = resolveDetectedLocale(
+            text,
+            detection.language,
+            detection.languageDetectionConfidence,
+            locales,
+            lastDetectedLocaleRef.current
+          );
+          lastDetectedLocaleRef.current = locale;
 
           if (text) {
-            setRecognizedText(text);
-            setInterimText('');
-            onRecognized?.(text);
-
-            // Auto-stop if not continuous - recognition will complete automatically
-            if (!sttConfig.continuousConversation) {
-              // Delay to ensure the recognition is processed
-              setTimeout(() => {
-                if (recognizerRef.current) {
-                  recognizerRef.current.stopContinuousRecognitionAsync(
-                    () => {
-                      setIsListening(false);
-                      setIsStarting(false);
-                    },
-                    (err) => {
-                      console.error('Error stopping recognition:', err);
-                      setIsListening(false);
-                      setIsStarting(false);
-                    }
-                  );
-                }
-              }, 100);
-            }
+            finalSegmentsRef.current.push(text);
+            const accumulatedText = finalSegmentsRef.current.join(' ').replace(/\s+/g, ' ').trim();
+            const metadata = {
+              locale,
+              languageLabel: getLanguageDisplay(locale),
+              detectionConfidence: detection.languageDetectionConfidence,
+            };
+            finalMetadataRef.current = metadata;
+            setRecognizedText(accumulatedText);
+            setInterimText(accumulatedText);
+            onRecognizing?.({
+              text: accumulatedText,
+              ...metadata,
+              recognizedAt: new Date().toISOString(),
+            });
           }
         }
       };
@@ -162,11 +231,13 @@ export function useSpeechRecognition({
         console.error('Speech recognition canceled:', e.errorDetails);
         setError(e.errorDetails);
         setIsListening(false);
+        onListeningChange?.(false);
         setIsStarting(false);
       };
 
       recognizer.sessionStopped = () => {
         setIsListening(false);
+        onListeningChange?.(false);
         setIsStarting(false);
       };
 
@@ -175,16 +246,19 @@ export function useSpeechRecognition({
       setError(err instanceof Error ? err.message : 'Failed to initialize recognizer');
       setIsStarting(false);
     }
-  }, [speechConfig, sttConfig, onRecognized, onRecognizing, cleanupRecognizer]);
+  }, [speechConfig, sttConfig, onRecognizing, onListeningChange, cleanupRecognizer]);
 
   // Start listening
   const startListening = useCallback(async () => {
     try {
       setError(null);
       setIsStarting(true);
+      lastDetectedLocaleRef.current = undefined;
       // Immediately clear buffers
       setInterimText('');
       setRecognizedText('');
+      finalSegmentsRef.current = [];
+      finalMetadataRef.current = null;
 
       // Request microphone permission
       try {
@@ -196,12 +270,13 @@ export function useSpeechRecognition({
 
       // Initialize recognizer if not already done
       if (!recognizerRef.current) {
-        initializeRecognizer();
+        await initializeRecognizer();
       }
 
       if (recognizerRef.current) {
         await recognizerRef.current.startContinuousRecognitionAsync();
         setIsListening(true);
+        onListeningChange?.(true);
         setIsStarting(false);
       }
     } catch (err) {
@@ -209,22 +284,33 @@ export function useSpeechRecognition({
       setError(err instanceof Error ? err.message : 'Failed to start listening');
       setIsStarting(false);
       setIsListening(false);
+      onListeningChange?.(false);
     }
-  }, [initializeRecognizer]);
+  }, [initializeRecognizer, onListeningChange]);
+
+  useEffect(() => {
+    if (!error) return;
+    const timer = setTimeout(() => setError(null), 7000);
+    return () => clearTimeout(timer);
+  }, [error]);
 
   // Stop listening
   const stopListening = useCallback(async () => {
     if (recognizerRef.current) {
       try {
-        await recognizerRef.current.stopContinuousRecognitionAsync();
+        await new Promise<void>((resolve, reject) => {
+          recognizerRef.current!.stopContinuousRecognitionAsync(resolve, reject);
+        });
+        flushRecognizedUtterance();
         setIsListening(false);
+        onListeningChange?.(false);
         setIsStarting(false);
         setInterimText('');
       } catch (err) {
         console.error('Error stopping speech recognition:', err);
       }
     }
-  }, []);
+  }, [flushRecognizedUtterance, onListeningChange]);
 
   // Cleanup on unmount and page events
   useEffect(() => {

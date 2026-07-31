@@ -18,7 +18,7 @@ export const AuthPage: React.FC = () => {
   const { update: updateSession } = useSession();
   const callbackUrl = searchParams.get('callbackUrl') || '/';
   
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState('amm.alsaadi@gmail.com');
   const [name, setName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,7 +76,7 @@ export const AuthPage: React.FC = () => {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="test@example.com"
+              placeholder="amm.alsaadi@gmail.com"
             />
             <Input
               label="Name (optional)"

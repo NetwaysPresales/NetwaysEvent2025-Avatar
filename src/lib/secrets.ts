@@ -8,6 +8,17 @@
 const secretCache: Map<string, string> = new Map();
 let keyVaultClient: { getSecret: (name: string) => Promise<{ value: string | undefined }> } | false | null = null;
 
+const keyVaultSecretNames: Record<string, string> = {
+  AZURE_AD_B2C_CLIENT_SECRET: 'azure-ad-b2c-client-secret',
+  AZURE_OPENAI_API_KEY: 'azure-openai-api-key',
+  AZURE_SEARCH_API_KEY: 'azure-search-api-key',
+  AZURE_SPEECH_KEY: 'azure-speech-key',
+  AZURE_STORAGE_ACCOUNT_KEY: 'azure-storage-account-key',
+  AZURE_STORAGE_CONNECTION_STRING: 'azure-storage-connection-string',
+  DATABASE_URL: 'database-url',
+  NEXTAUTH_SECRET: 'nextauth-secret',
+};
+
 /**
  * Initialize Azure Key Vault client if configured
  */
@@ -62,7 +73,7 @@ export async function getSecret(secretName: string): Promise<string> {
   const client = await initializeKeyVault();
   if (client) {
     try {
-      const secret = await client.getSecret(secretName);
+      const secret = await client.getSecret(keyVaultSecretNames[secretName] || secretName);
       if (secret.value) {
         secretCache.set(secretName, secret.value);
         return secret.value;

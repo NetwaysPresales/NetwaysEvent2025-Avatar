@@ -1,16 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { getProfile } from '@/lib/profile-service';
-import { buildSystemPromptWithKnowledge, buildSystemPromptWithEntities } from '@/lib/knowledge-service';
+import { buildSystemPromptWithEntities } from '@/lib/knowledge-service';
 import {
   getOrCreateConversation,
   loadConversationMessages,
   saveConversationMessages,
 } from '@/lib/conversation-service';
-import { HumanMessage, AIMessage, ToolMessage } from '@langchain/core/messages';
+import { HumanMessage, AIMessage } from '@langchain/core/messages';
 import { buildAgent } from '@/agent/graph';
 import type { EntityVisualizationResponse } from '@/types/entity-visualization';
 import type { AzureOpenAIConfig } from '@/types/avatar';
+import type { DocumentVisualization } from '@/types/document-visualization';
+import { formatTextForDisplay, takeNextSpeechSegment } from '@/lib/text-processing';
+
+function toolOutputText(output: unknown): string {
+  if (typeof output === 'string') return output;
+  if (output && typeof output === 'object' && 'content' in output) {
+    const content = (output as { content: unknown }).content;
+    return typeof content === 'string' ? content : JSON.stringify(content);
+  }
+  return JSON.stringify(output);
+}
 
 /**
  * POST /api/agent
@@ -38,6 +49,8 @@ export async function POST(req: NextRequest) {
     const profileId = body?.profileId;
     const conversationId = body?.conversationId ? String(body.conversationId) : undefined;
     const systemPrompt = body?.systemPrompt ? String(body.systemPrompt) : undefined;
+    const detectedLocale = body?.detectedLocale ? String(body.detectedLocale) : undefined;
+    const detectedLanguage = body?.detectedLanguage ? String(body.detectedLanguage) : undefined;
 
     // Validate required fields
     if (!userText || typeof userText !== 'string' || userText.trim().length === 0) {
@@ -71,32 +84,45 @@ export async function POST(req: NextRequest) {
     const openAIConfig = profile.openaiConfig as AzureOpenAIConfig | null;
     // Priority: 1) Request body systemPrompt (if provided), 2) Database systemPrompt, 3) Default from config
     let baseSystemPrompt = systemPrompt || openAIConfig?.systemPrompt || '';
-    
+
     // If still empty, use default from config (shouldn't happen, but safety fallback)
     if (!baseSystemPrompt) {
       const { getDefaultAzureOpenAIConfig } = await import('@/lib/config');
       baseSystemPrompt = getDefaultAzureOpenAIConfig().systemPrompt;
     }
-    
-    // HACK: Inject knowledge files from cache into system prompt
-    // TODO: Replace with Azure AI Search integration when ready
-    baseSystemPrompt = await buildSystemPromptWithKnowledge(
-      session.userId,
-      profileId,
-      baseSystemPrompt
-    );
-    
+
+    if (detectedLocale) {
+      baseSystemPrompt += `\n\nCURRENT TURN LANGUAGE:\nThe user's speech was auto-detected as ${detectedLanguage || detectedLocale} (${detectedLocale}). Respond entirely in that language for this turn unless the user explicitly asks for another language.`;
+    }
+
+    baseSystemPrompt += `\n\nTOOL SELECTION RULES:
+- Do not call knowledge_base, visualize_document, or entity tools for greetings, thanks, introductions, capability questions, or casual conversation.
+- Use knowledge_base for substantive questions whose answer depends on profile documents.
+- Search results are not a complete inventory. Use knowledge_base with query "list" if the user asks which files are available.
+- Call visualize_document at most once per user turn. Select the single strongest evidence page, and only visualize it when seeing the page materially helps. Keep visual evidence open for at least 20 seconds; use 20 seconds when unsure.
+
+VOICE RESPONSE STYLE:
+- Be concise by default: answer in 2-5 short sentences or no more than 5 compact bullets.
+- Lead with the direct answer. Do not restate the user's question or add a long introduction.
+- Include only the policy details needed to answer the request; expand only when the user asks for detail.
+- Never put a raw technical filename, file extension, underscore-separated name, chunk number, or a standalone "Source:" line in the answer. The interface displays exact filenames separately.
+- Add a short in-text citation immediately after the supported claim, using only forms such as "(HR Policy, p. 35)" or "(Finance Policy, pp. 15-17)."
+- Do not write citations as sentences. Citations are display metadata and must not be part of the spoken narrative.
+- Write for speech: use short complete sentences, natural commas, and clear sentence-ending punctuation. Expand uncommon abbreviations on first use.
+- Do not end with generic offers such as "If you want, I can..." unless a necessary clarification is required.`;
+
     // Inject available entity information into system prompt
     baseSystemPrompt = await buildSystemPromptWithEntities(
       session.userId,
       profileId,
       baseSystemPrompt
     );
-    
+
     const agent = buildAgent({
       systemPrompt: baseSystemPrompt,
       userId: session.userId,
       profileId,
+      enableVisualizations: profile.showEvidencePanel,
     });
 
     // Convert conversation messages to LangChain messages
@@ -113,108 +139,196 @@ export async function POST(req: NextRequest) {
     // Add current user message
     langchainMessages.push(new HumanMessage(userText));
 
-    // Process message
-    let result;
-    let reply = '';
-    
-    try {
-      result = await agent.invoke({ messages: langchainMessages });
-      const last = result.messages[result.messages.length - 1];
-      reply = String(last?.content ?? '').trim();
-      
-      if (!reply) {
-        console.warn('[API] Agent returned empty reply');
-        reply = 'I apologize, but I was unable to generate a response. Please try again.';
-      }
-    } catch (error) {
-      console.error('[API] Agent invocation error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      reply = `I encountered an error while processing your request: ${errorMessage}. Please try again.`;
-      // Create a minimal result structure for error handling
-      result = { messages: [] };
-    }
+    // Process message via Streaming Instead of Invoke
+    const stream = new ReadableStream({
+      async start(controller) {
+        const assistantMessageId = crypto.randomUUID();
+        let fullReply = '';
+        let displayBuffer = '';
+        let entityVisualization: EntityVisualizationResponse | null = null;
+        let documentVisualizationSent = false;
+        let isAborted = false;
+        const preserveTechnicalFilenames = /(?:list|show)\s+(?:their\s+|the\s+)?exact\s+filenames|exact\s+filenames\s+only/i.test(userText);
+        const emitDisplayContent = (text: string, separator = '') => {
+          const displayText = preserveTechnicalFilenames ? text : formatTextForDisplay(text);
+          if (!displayText) return;
+          const payload = JSON.stringify({
+            event: 'content',
+            data: `${displayText}${separator}`,
+            messageId: assistantMessageId,
+          });
+          controller.enqueue(new TextEncoder().encode(`data: ${payload}\n\n`));
+        };
+        controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
+          event: 'conversation',
+          data: { conversationId: effectiveConversationId, assistantMessageId, createdAt: new Date().toISOString() },
+        })}\n\n`));
 
-    // Check for visualize_entity tool calls
-    // CRITICAL FIX: ToolMessage doesn't have a 'name' property
-    // Need to find AIMessage with tool_calls, then match ToolMessage by tool_call_id
-    let entityVisualization: EntityVisualizationResponse | null = null;
-
-    // Search through messages to find visualize_entity tool calls
-    // Process in reverse to get the most recent visualization
-    for (let i = result.messages.length - 1; i >= 0; i--) {
-      const msg = result.messages[i];
-      
-      // Find AIMessage with tool calls for 'visualize_entity'
-      if (msg instanceof AIMessage && msg.tool_calls && msg.tool_calls.length > 0) {
-        for (const toolCall of msg.tool_calls) {
-          if (toolCall.name === 'visualize_entity') {
-            // Find corresponding ToolMessage by tool_call_id
-            const toolMessage = result.messages.find(
-              (m): m is ToolMessage => 
-                m instanceof ToolMessage && m.tool_call_id === toolCall.id
+        // Cleanup function for database saving
+        const cleanupAndSave = async () => {
+          if (!fullReply.trim()) return;
+          try {
+            const updatedMessages = [
+              ...conversationMessages,
+              { role: 'user' as const, content: userText },
+              { role: 'assistant' as const, content: fullReply.trim() },
+            ];
+            await saveConversationMessages(
+              effectiveConversationId,
+              session.userId,
+              updatedMessages
             );
-            
-            if (toolMessage) {
+          } catch (error) {
+            console.error('[API] Failed to save conversation history:', error);
+          }
+        };
+
+        // If client aborts early, save what we have
+        req.signal.addEventListener('abort', () => {
+          isAborted = true;
+          console.log('[API] Client aborted stream. Saving partial reply:', fullReply.length, 'chars');
+          cleanupAndSave();
+        });
+
+        try {
+          const events = await agent.streamEvents(
+            { messages: langchainMessages },
+            { version: 'v2' }
+          );
+
+          for await (const rawEvent of events) {
+            if (isAborted) break;
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const event = rawEvent as any;
+
+            if (event.event === 'on_tool_start' && event.name === 'knowledge_base') {
+              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
+                event: 'retrieval',
+                data: { status: 'searching' },
+              })}\n\n`));
+            }
+
+            // Handle standard token chunks
+            if (event.event === 'on_chat_model_stream') {
+              const chunkText = event.data?.chunk?.content;
+              if (typeof chunkText === 'string' && chunkText) {
+                fullReply += chunkText;
+                displayBuffer += chunkText;
+                let nextSegment = takeNextSpeechSegment(displayBuffer);
+                while (nextSegment) {
+                  const markdownLine = /^\s*(?:#{1,6}\s|[-*•]\s|\d+[.)]\s)/.test(nextSegment.segment);
+                  emitDisplayContent(nextSegment.segment, markdownLine ? '\n' : ' ');
+                  displayBuffer = nextSegment.remainder;
+                  nextSegment = takeNextSpeechSegment(displayBuffer);
+                }
+              }
+            }
+
+            if (event.event === 'on_tool_end' && event.name === 'knowledge_base') {
+              const rawOutput = event.data?.output?.content ?? event.data?.output ?? '';
+              const output = typeof rawOutput === 'string' ? rawOutput : JSON.stringify(rawOutput);
+              const sourcePattern = /\[Source\s+\d+:\s+([^,\]]+)(?:,\s*page\s+(\d+))?(?:,\s*chunk\s+(\d+))?\]/gi;
+              const sources: Array<{ filename: string; page?: number; chunk?: number }> = [];
+              let match: RegExpExecArray | null;
+              while ((match = sourcePattern.exec(output)) !== null) {
+                if (!sources.some((source) => source.filename === match![1] && source.page === Number(match![2]) && source.chunk === Number(match![3]))) {
+                  sources.push({ filename: match[1].trim(), ...(match[2] ? { page: Number(match[2]) } : {}), ...(match[3] ? { chunk: Number(match[3]) } : {}) });
+                }
+              }
+              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
+                event: 'sources',
+                data: { status: sources.length ? 'grounded' : 'none', sources },
+              })}\n\n`));
+            }
+
+            if (event.event === 'on_tool_end' && event.name === 'visualize_document' && !documentVisualizationSent) {
               try {
-                const content = typeof toolMessage.content === 'string' 
-                  ? toolMessage.content 
-                  : JSON.stringify(toolMessage.content);
-                const parsed = JSON.parse(content);
-                
-                // If visualize_entity was called, it always visualizes
-                if (parsed.found === true && parsed.entityId) {
-                  // Validate the structure matches our expected format
-                  if (parsed.visualizationData && parsed.entityName && parsed.agentContext) {
-                    entityVisualization = {
-                      entityId: parsed.entityId,
-                      entityName: parsed.entityName,
-                      visualizationData: parsed.visualizationData,
-                      agentContext: parsed.agentContext,
-                      visualize: true,
-                    };
-                    // Found it, exit loops
-                    break;
-                  }
+                const parsed = JSON.parse(toolOutputText(event.data?.output)) as DocumentVisualization & { found?: boolean };
+                if (parsed.found && parsed.knowledgeFileId && parsed.pageNumber && parsed.documentUrl) {
+                  documentVisualizationSent = true;
+                  const visualization: DocumentVisualization = {
+                    knowledgeFileId: parsed.knowledgeFileId,
+                    filename: parsed.filename,
+                    pageNumber: parsed.pageNumber,
+                    quote: parsed.quote,
+                    documentUrl: parsed.documentUrl,
+                    displayDurationMs: parsed.displayDurationMs,
+                  };
+                  controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
+                    event: 'document',
+                    data: visualization,
+                  })}\n\n`));
                 }
               } catch (error) {
-                console.error('[API] Failed to parse entity tool response:', error);
+                console.error('[API] Failed to parse document visualization:', error);
+              }
+            }
+
+            // Handle tool outputs (Entity Visualization)
+            if (event.event === 'on_tool_end' && event.name === 'visualize_entity') {
+              try {
+                const parsed = event.data.output;
+                if (parsed?.found === true && parsed?.entityId && parsed?.visualizationData) {
+                  entityVisualization = {
+                    entityId: parsed.entityId,
+                    entityName: parsed.entityName,
+                    visualizationData: parsed.visualizationData,
+                    agentContext: parsed.agentContext,
+                    visualize: true,
+                  };
+
+                  const payload = JSON.stringify({
+                    event: 'tool',
+                    data: entityVisualization,
+                  });
+                  controller.enqueue(new TextEncoder().encode(`data: ${payload}\n\n`));
+                }
+              } catch (e) {
+                console.error('[API] Failed to parse streaming tool response:', e);
               }
             }
           }
-        }
-        // If we found a visualization, exit outer loop
-        if (entityVisualization) {
-          break;
+
+          if (!isAborted) {
+            if (displayBuffer.trim()) {
+              emitDisplayContent(displayBuffer.trim());
+              displayBuffer = '';
+            }
+            // Stream naturally finished. Save full context.
+            const endPayload = JSON.stringify({
+              event: 'done',
+              conversationId: effectiveConversationId,
+              messageId: assistantMessageId,
+              completedAt: new Date().toISOString(),
+            });
+            controller.enqueue(new TextEncoder().encode(`data: ${endPayload}\n\n`));
+            await cleanupAndSave();
+            controller.close();
+          }
+
+        } catch (error) {
+          console.error('[API] Agent streaming error:', error);
+          if (!isAborted) {
+            const errorPayload = JSON.stringify({
+              event: 'error',
+              data: error instanceof Error ? error.message : 'Streaming failed',
+            });
+            controller.enqueue(new TextEncoder().encode(`data: ${errorPayload}\n\n`));
+            controller.close();
+          }
         }
       }
-    }
-
-    // Save conversation to database (user message + assistant reply)
-    // Only save if we got a valid reply
-    if (reply) {
-      try {
-        const updatedMessages = [
-          ...conversationMessages,
-          { role: 'user' as const, content: userText },
-          { role: 'assistant' as const, content: reply },
-        ];
-        
-        await saveConversationMessages(
-          effectiveConversationId,
-          session.userId,
-          updatedMessages
-        );
-      } catch (error) {
-        // Log but don't fail the request if saving history fails
-        console.error('[API] Failed to save conversation history:', error);
-      }
-    }
-
-    return NextResponse.json({
-      reply,
-      conversationId: effectiveConversationId,
-      entityVisualization,
     });
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
+    });
+
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     if (errorMessage === 'Unauthorized') {

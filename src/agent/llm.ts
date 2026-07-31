@@ -2,21 +2,16 @@ import { AzureChatOpenAI } from '@langchain/openai';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 
 export function azureModelFromEnv(): BaseChatModel | null {
-  // Accept either server-side AZURE_* or NEXT_PUBLIC_* (user provided)
-  const apiKey = process.env.AZURE_OPENAI_API_KEY
-    || process.env.NEXT_PUBLIC_AZURE_OPENAI_API_KEY
-    || process.env.OPENAI_API_KEY;
-  const baseUrl = process.env.AZURE_OPENAI_ENDPOINT
-    || process.env.NEXT_PUBLIC_AZURE_OPENAI_ENDPOINT;
+  // LLM calls are server-side. Never fall back to browser-visible credentials.
+  const apiKey = process.env.AZURE_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+  const baseUrl = process.env.AZURE_OPENAI_ENDPOINT;
   const deployment = process.env.AZURE_OPENAI_DEPLOYMENT
-    || process.env.NEXT_PUBLIC_AZURE_OPENAI_DEPLOYMENT
     || process.env.OPENAI_MODEL
-    || 'gpt-4o-mini';
+    || 'gpt-5.4-mini';
 
   if (apiKey && baseUrl) {
     const apiVersion = process.env.AZURE_OPENAI_API_VERSION
-      || process.env.NEXT_PUBLIC_AZURE_OPENAI_API_VERSION
-      || '2024-08-01-preview';
+      || '2025-04-01-preview';
     // AzureChatOpenAI expects the resource instance name, not the full URL
     let instanceName = baseUrl;
     try {
@@ -28,7 +23,6 @@ export function azureModelFromEnv(): BaseChatModel | null {
       azureOpenAIApiInstanceName: instanceName,
       azureOpenAIApiDeploymentName: deployment,
       azureOpenAIApiVersion: apiVersion,
-      temperature: 0,
     });
   }
 

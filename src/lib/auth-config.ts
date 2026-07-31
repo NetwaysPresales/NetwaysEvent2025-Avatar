@@ -87,9 +87,11 @@ async function buildAuthOptions(): Promise<NextAuthOptions> {
     console.warn('Azure AD B2C not configured, skipping provider:', error);
   }
 
-  // Credentials Provider (development/testing)
-  // Only add if Azure AD B2C is not configured
-  if (providers.length === 0 || process.env.NODE_ENV === 'development') {
+  const allowDemoAuth = process.env.NODE_ENV === 'development'
+    || process.env.ENABLE_DEMO_AUTH === 'true';
+
+  // Credentials auth is intentionally opt-in outside local development.
+  if (allowDemoAuth) {
     providers.push(
       CredentialsProvider({
         name: 'Credentials',
@@ -121,6 +123,12 @@ async function buildAuthOptions(): Promise<NextAuthOptions> {
           }
         },
       })
+    );
+  }
+
+  if (providers.length === 0) {
+    throw new Error(
+      'No authentication provider is configured. Configure Azure AD B2C or set ENABLE_DEMO_AUTH=true for a non-production demo.'
     );
   }
 
