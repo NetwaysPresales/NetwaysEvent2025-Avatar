@@ -6,6 +6,8 @@
 
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth-config';
+import { db } from '@/lib/db';
+import { PLATFORM_ADMIN_EMAIL } from '@/lib/access-control';
 
 /**
  * Extended session type with userId
@@ -17,6 +19,7 @@ export interface SessionWithUserId {
   };
   userId: string;
   accessToken?: string;
+  role: 'ADMIN' | 'USER';
 }
 
 /**
@@ -49,7 +52,22 @@ export async function getSession(): Promise<SessionWithUserId | null> {
     return null;
   }
 
-  return extendedSession;
+  const platformUser = await db.user.findFirst({
+    where: {
+      id: extendedSession.userId,
+      email: extendedSession.user.email.toLowerCase(),
+      isActive: true,
+    },
+    select: { role: true },
+  });
+  if (!platformUser) return null;
+  return { ...extendedSession, role: platformUser.role };
+}
+
+export async function requireAdmin(): Promise<SessionWithUserId> {
+  const session = await requireAuth();
+  if (session.role !== 'ADMIN' || session.user.email.toLowerCase() !== PLATFORM_ADMIN_EMAIL) throw new Error('Forbidden');
+  return session;
 }
 
 /**

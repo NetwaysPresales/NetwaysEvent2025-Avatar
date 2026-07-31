@@ -17,11 +17,13 @@ import type { AvatarConfig } from '@/types/avatar';
 interface ProfileListProps {
   onProfileSelect: (profile: Profile) => void;
   onSettingsClick: (profile: Profile) => void;
+  currentUserId?: string;
 }
 
 export const ProfileList: React.FC<ProfileListProps> = ({
   onProfileSelect,
   onSettingsClick,
+  currentUserId,
 }) => {
   const { profiles, currentProfile, deleteProfile, isLoadingProfiles } = useProfile();
   const theme = useTheme();
@@ -54,6 +56,7 @@ export const ProfileList: React.FC<ProfileListProps> = ({
     <div className="flex-1 overflow-y-auto p-4 space-y-4 sleek-scrollbar">
       {profiles.map((p) => {
         const isCurrent = currentProfile?.id === p.id;
+        const canManage = p.userId === currentUserId;
 
         return (
           <div
@@ -100,6 +103,7 @@ export const ProfileList: React.FC<ProfileListProps> = ({
                       title="Active"
                     />
                   )}
+                  {p.isShared && <span className="shrink-0 rounded-full bg-[var(--accent-primary)]/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-[var(--accent-primary)]">Shared</span>}
                 </div>
 
                 <div
@@ -121,6 +125,7 @@ export const ProfileList: React.FC<ProfileListProps> = ({
               </div>
 
               <div className="flex gap-1 pointer-events-auto shrink-0">
+                {canManage && <>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -192,6 +197,7 @@ export const ProfileList: React.FC<ProfileListProps> = ({
                     />
                   </svg>
                 </button>
+                </>}
               </div>
             </div>
           </div>

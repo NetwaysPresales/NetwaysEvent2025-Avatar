@@ -24,7 +24,6 @@ import type { SpeechRecognitionUpdate } from '@/hooks/useSpeechRecognition';
 import type { ConversationMessage } from '@/types/conversation-ui';
 import { findAvatarCharacter } from '@/lib/avatar-catalog';
 
-const RECONNECT_TIMEOUT_MS = 3600000;
 const COMPANY_INFO_HIDE_DELAY_MS = 2000;
 
 export const AvatarPage: React.FC = () => {
@@ -48,6 +47,7 @@ export const AvatarPage: React.FC = () => {
   const [isAvatarReady, setIsAvatarReady] = useState(false);
   const [showEntityVisualization, setShowEntityVisualization] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
+  const [hasSessionIntent, setHasSessionIntent] = useState(false);
   const [mobileWorkspace, setMobileWorkspace] = useState<'conversation' | 'visuals' | null>(null);
 
   const currentEntityVisualizationRef = useRef<typeof currentEntityVisualization>(null);
@@ -84,7 +84,6 @@ export const AvatarPage: React.FC = () => {
     speechConfig: hydrated?.speechConfig || getDefaultSpeechConfig(),
     avatarConfig: hydrated?.avatarConfig || getDefaultAvatarConfig(),
     ttsConfig: hydrated?.ttsConfig || getDefaultTTSConfig(),
-    autoReconnectMs: RECONNECT_TIMEOUT_MS,
     onVideoTrack: setupVideoElement,
     onAudioTrack: setupAudioElement,
     onEvent: (event) => {
@@ -106,6 +105,13 @@ export const AvatarPage: React.FC = () => {
       router.push('/');
     }
   }, [profileState, hydrated, router]);
+
+  useEffect(() => {
+    const requested = sessionStorage.getItem('avatar-session-requested') === 'true';
+    sessionStorage.removeItem('avatar-session-requested');
+    if (requested) setHasSessionIntent(true);
+    else router.replace('/');
+  }, [router]);
 
   const handleInterrupt = useCallback(() => {
     // Instantly stop text generation from LLM
@@ -237,7 +243,7 @@ export const AvatarPage: React.FC = () => {
   }, [hydrated, currentProfile, startSession]);
 
   useEffect(() => {
-    if (!hydrated || !currentProfile || hasInitiatedAutoStart) return;
+    if (!hydrated || !currentProfile || !hasSessionIntent || hasInitiatedAutoStart) return;
 
     const timer = setTimeout(() => {
       setHasInitiatedAutoStart(true);
@@ -255,7 +261,7 @@ export const AvatarPage: React.FC = () => {
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [handleStartSession, hydrated, currentProfile, hasInitiatedAutoStart]);
+  }, [handleStartSession, hydrated, currentProfile, hasSessionIntent, hasInitiatedAutoStart]);
 
   const isConnected = avatarState === 'connected' || avatarState === 'speaking';
   const isConnecting = avatarState === 'connecting';

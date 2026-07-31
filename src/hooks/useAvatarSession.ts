@@ -99,9 +99,9 @@ export function useAvatarSession({
             if (eventData.event.eventType === 'EVENT_TYPE_SESSION_END') {
               if (sessionActiveRef.current && !isReconnectingRef.current) {
                 const idleMs = Date.now() - lastInteractionRef.current.getTime();
-                const maxIdleMs = autoReconnectMs ?? 300000; // 5 minutes default
+                const maxIdleMs = autoReconnectMs ?? 0;
                 // Reconnect if last interaction was within the timeout window
-                if (idleMs < maxIdleMs) {
+                if (maxIdleMs > 0 && idleMs < maxIdleMs) {
                   isReconnectingRef.current = true;
 
                   // Trigger event to show meg.png before reconnection
@@ -343,9 +343,20 @@ export function useAvatarSession({
     }
   }, [updateState]);
 
-  // Cleanup on unmount
+  // Never leave a paid avatar session running after navigation, unload, or
+  // backgrounding the page. A stopped background session is not auto-restarted.
   useEffect(() => {
+    const stopForPageExit = () => stopSession();
+    const stopWhenHidden = () => {
+      if (document.visibilityState === 'hidden') stopSession();
+    };
+    window.addEventListener('pagehide', stopForPageExit);
+    window.addEventListener('beforeunload', stopForPageExit);
+    document.addEventListener('visibilitychange', stopWhenHidden);
     return () => {
+      window.removeEventListener('pagehide', stopForPageExit);
+      window.removeEventListener('beforeunload', stopForPageExit);
+      document.removeEventListener('visibilitychange', stopWhenHidden);
       stopSession();
     };
   }, [stopSession]);

@@ -122,10 +122,15 @@ export async function getProfile(userId: string, profileId: string) {
   const profile = await db.profile.findFirst({
     where: {
       id: profileId,
-      userId: userId,
+      OR: [{ userId }, { isShared: true }],
     },
   });
 
+  return profile ? redactProfileSecrets(profile) : null;
+}
+
+export async function getOwnedProfile(userId: string, profileId: string) {
+  const profile = await db.profile.findFirst({ where: { id: profileId, userId } });
   return profile ? redactProfileSecrets(profile) : null;
 }
 
@@ -137,9 +142,7 @@ export async function getProfile(userId: string, profileId: string) {
  */
 export async function listProfiles(userId: string) {
   const profiles = await db.profile.findMany({
-    where: {
-      userId: userId,
-    },
+    where: { OR: [{ userId }, { isShared: true }] },
     orderBy: {
       createdAt: 'desc',
     },
@@ -384,9 +387,10 @@ export async function getProfileAssetUrl(
   const profile = await db.profile.findFirst({
     where: {
       id: profileId,
-      userId: userId,
+      OR: [{ userId }, { isShared: true }],
     },
     select: {
+      userId: true,
       logoBlobUrl: true,
       backgroundBlobUrl: true,
     },
@@ -403,7 +407,7 @@ export async function getProfileAssetUrl(
   }
 
   // Use unified media service to generate SAS URL
-  return await getMediaUrl(userId, blobUrl, { expiresInMinutes, verifyOwnership: true });
+  return await getMediaUrl(profile.userId, blobUrl, { expiresInMinutes, verifyOwnership: true });
 }
 
 /**

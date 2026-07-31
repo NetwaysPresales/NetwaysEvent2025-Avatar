@@ -17,9 +17,11 @@ import { SettingsModal } from '@/components/settings';
 import { PageHeader } from '@/components/navigation';
 import { CreateProfileModal } from './CreateProfileModal';
 import type { Profile } from '@/types/profile';
+import { useSession } from 'next-auth/react';
 
 export const LandingPage: React.FC = () => {
   const router = useRouter();
+  const { data: session } = useSession();
   const {
     hydrated,
     currentProfile,
@@ -57,6 +59,7 @@ export const LandingPage: React.FC = () => {
   const handleStart = () => {
     if (!currentProfile || !hydrated) return;
     setIsStarting(true);
+    sessionStorage.setItem('avatar-session-requested', 'true');
     router.push('/avatar');
   };
 
@@ -76,7 +79,7 @@ export const LandingPage: React.FC = () => {
     <div className={`fixed inset-0 h-screen w-full flex overflow-hidden theme-transition ${theme === 'light' ? 'bg-zinc-50' : 'bg-black'}`}>
       {/* Header with User Menu and Theme Toggle */}
       <PageHeader
-        onSettingsClick={currentProfile ? () => setIsSettingsOpen(true) : undefined}
+        onSettingsClick={currentProfile?.userId === session?.userId ? () => setIsSettingsOpen(true) : undefined}
         showHomeButton={false}
         showThemeToggle={true}
       />
@@ -100,6 +103,7 @@ export const LandingPage: React.FC = () => {
         <ProfileList
           onProfileSelect={handleProfileSelect}
           onSettingsClick={handleSettingsClick}
+          currentUserId={session?.userId}
         />
 
         {/* Create New Button */}

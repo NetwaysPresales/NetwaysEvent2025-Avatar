@@ -113,14 +113,14 @@ VOICE RESPONSE STYLE:
 
     // Inject available entity information into system prompt
     baseSystemPrompt = await buildSystemPromptWithEntities(
-      session.userId,
+      profile.userId,
       profileId,
       baseSystemPrompt
     );
 
     const agent = buildAgent({
       systemPrompt: baseSystemPrompt,
-      userId: session.userId,
+      userId: profile.userId,
       profileId,
       enableVisualizations: profile.showEvidencePanel,
     });

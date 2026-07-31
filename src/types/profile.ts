@@ -25,6 +25,7 @@ export interface Profile {
   accentColor: AccentColor | null;
   logoShowContainer: boolean;
   showEvidencePanel: boolean;
+  isShared: boolean;
 
   // Asset references (Blob Storage URLs)
   logoBlobUrl: string | null;

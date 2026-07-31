@@ -10,54 +10,32 @@ import AzureADB2CProvider from 'next-auth/providers/azure-ad-b2c';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { getSecret } from '@/lib/secrets';
 import { db } from '@/lib/db';
+import { getActivePlatformUser, normalizeEmail } from '@/lib/access-control';
+import { verifyPassword } from '@/lib/password';
 
 /**
  * Get or create user in database
  * Called on first login to sync user from Azure AD to our database
  */
-async function getOrCreateUser(
+async function getAuthorizedUser(
   email: string,
   name: string | null,
-  azureAdId: string | null
-): Promise<string> {
-  // Try to find existing user by email or Azure AD ID
-  let user = await db.user.findFirst({
-    where: {
-      OR: [
-        { email },
-        ...(azureAdId ? [{ azureAdId }] : []),
-      ],
-    },
-  });
-
-  if (user) {
-    // Update user if Azure AD ID is provided and not set
-    if (azureAdId && !user.azureAdId) {
-      user = await db.user.update({
-        where: { id: user.id },
-        data: { azureAdId },
-      });
-    }
-    // Update name if provided and different
-    if (name && user.name !== name) {
-      user = await db.user.update({
-        where: { id: user.id },
-        data: { name },
-      });
-    }
-    return user.id;
+  azureAdId: string | null,
+  password?: string
+): Promise<{ id: string; role: 'ADMIN' | 'USER' }> {
+  let user = await getActivePlatformUser(normalizeEmail(email));
+  if (!user) throw new Error('AccessDenied');
+  if (password !== undefined && !verifyPassword(password, user.passwordHash)) throw new Error('AccessDenied');
+  if ((azureAdId && !user.azureAdId) || (name && user.name !== name)) {
+    user = await db.user.update({
+      where: { id: user.id },
+      data: {
+        ...(azureAdId && !user.azureAdId ? { azureAdId } : {}),
+        ...(name && user.name !== name ? { name } : {}),
+      },
+    });
   }
-
-  // Create new user
-  const newUser = await db.user.create({
-    data: {
-      email,
-      name,
-      azureAdId,
-    },
-  });
-
-  return newUser.id;
+  return { id: user.id, role: user.role };
 }
 
 /**
@@ -98,24 +76,27 @@ async function buildAuthOptions(): Promise<NextAuthOptions> {
         credentials: {
           email: { label: 'Email', type: 'email', placeholder: 'test@example.com' },
           name: { label: 'Name', type: 'text', placeholder: 'Test User' },
+          password: { label: 'Password', type: 'password' },
         },
         async authorize(credentials) {
           try {
-            if (!credentials?.email) {
+            if (!credentials?.email || !credentials?.password) {
               return null;
             }
 
             // For development: create or get user
-            const userId = await getOrCreateUser(
+            const authorizedUser = await getAuthorizedUser(
               credentials.email,
               credentials.name || null,
-              null // No Azure AD ID for credentials provider
+              null,
+              credentials.password
             );
 
             return {
-              id: userId,
+              id: authorizedUser.id,
               email: credentials.email,
               name: credentials.name || null,
+              role: authorizedUser.role,
             };
           } catch (error) {
             console.error('[NextAuth] Authorize error:', error);
@@ -163,15 +144,29 @@ async function buildAuthOptions(): Promise<NextAuthOptions> {
               : null) || account.providerAccountId || null;
 
           if (email) {
-            const userId = await getOrCreateUser(email, name || null, azureAdId);
+            const authorizedUser = await getAuthorizedUser(email, name || null, azureAdId);
             
-            token.userId = userId;
+            token.userId = authorizedUser.id;
+            token.role = authorizedUser.role;
             token.email = email;
             token.name = name;
             
             if (account.access_token) {
               token.accessToken = account.access_token;
             }
+          }
+        }
+
+        if (token.userId) {
+          const platformUser = await db.user.findUnique({
+            where: { id: String(token.userId) },
+            select: { role: true, isActive: true },
+          });
+          if (platformUser?.isActive) {
+            token.role = platformUser.role;
+          } else {
+            delete token.userId;
+            delete token.role;
           }
         }
 
@@ -185,6 +180,7 @@ async function buildAuthOptions(): Promise<NextAuthOptions> {
         const extendedSession = {
           ...session,
           userId: token.userId as string | undefined,
+          role: token.role as 'ADMIN' | 'USER' | undefined,
           accessToken: token.accessToken as string | undefined,
         };
         return extendedSession;

@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
-import { getProfile } from '@/lib/profile-service';
+import { getOwnedProfile, getProfile } from '@/lib/profile-service';
 import { db, transaction } from '@/lib/db';
 import { setCachedEntities, clearCachedEntities } from '@/lib/server-cache';
 
@@ -112,7 +112,7 @@ export async function POST(
     const { id: profileId } = await params;
 
     // Verify ownership
-    const profile = await getProfile(session.userId, profileId);
+    const profile = await getOwnedProfile(session.userId, profileId);
     if (!profile) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }

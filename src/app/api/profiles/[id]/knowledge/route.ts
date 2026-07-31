@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
-import { getProfile } from '@/lib/profile-service';
+import { getOwnedProfile, getProfile } from '@/lib/profile-service';
 import { db } from '@/lib/db';
 import {
   CONTAINERS,
@@ -31,7 +31,7 @@ export async function GET(
     }
 
     const knowledgeFiles = await db.knowledgeFile.findMany({
-      where: { userId: session.userId, profileId: id },
+      where: { profileId: id },
       orderBy: { uploadedAt: 'asc' },
     });
 
@@ -69,7 +69,7 @@ export async function DELETE(
     if (!fileId && !filename) {
       return NextResponse.json({ error: 'fileId parameter is required' }, { status: 400 });
     }
-    if (!await getProfile(session.userId, id)) {
+    if (!await getOwnedProfile(session.userId, id)) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
@@ -108,7 +108,7 @@ export async function POST(
   try {
     const session = await requireAuth();
     const { id } = await params;
-    if (!await getProfile(session.userId, id)) {
+    if (!await getOwnedProfile(session.userId, id)) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 

@@ -16,6 +16,9 @@ model User {
   azureAdId String?  @unique @map("azure_ad_id") @db.VarChar(255)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  role      UserRole @default(USER)
+  isActive  Boolean  @default(false) @map("is_active")
+  passwordHash String? @map("password_hash") @db.VarChar(255)
 
   profiles        Profile[]
   knowledgeFiles  KnowledgeFile[]
@@ -26,6 +29,11 @@ model User {
   @@index([email], name: "idx_users_email")
   @@index([azureAdId], name: "idx_users_azure_ad_id")
   @@map("users")
+}
+
+enum UserRole {
+  ADMIN
+  USER
 }
 
 model Profile {
@@ -49,6 +57,7 @@ model Profile {
   accentColor       Json?   @map("accent_color")
   logoShowContainer Boolean @default(true) @map("logo_show_container")
   showEvidencePanel  Boolean @default(true) @map("show_evidence_panel")
+  isShared           Boolean @default(false) @map("is_shared")
 
   // Asset references (Blob Storage URLs)
   logoBlobUrl       String? @map("logo_blob_url") @db.VarChar(500)

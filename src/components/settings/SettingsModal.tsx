@@ -12,13 +12,15 @@ import { APISettings } from './APISettings';
 import { AppearanceSettings } from './AppearanceSettings';
 import { KnowledgeSettings } from './KnowledgeSettings';
 import { EntitySettings } from './EntitySettings';
+import { AccessSettings } from './AccessSettings';
+import { useSession } from 'next-auth/react';
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-type SettingsTab = 'avatar' | 'voice' | 'behavior' | 'appearance' | 'knowledge' | 'entities' | 'api';
+type SettingsTab = 'avatar' | 'voice' | 'behavior' | 'appearance' | 'knowledge' | 'entities' | 'api' | 'access';
 
 const TABS: Array<{ id: SettingsTab; label: string; hint: string }> = [
   { id: 'avatar', label: 'Avatar', hint: 'Character and style' },
@@ -28,6 +30,7 @@ const TABS: Array<{ id: SettingsTab; label: string; hint: string }> = [
   { id: 'knowledge', label: 'Knowledge', hint: 'Indexed documents' },
   { id: 'entities', label: 'Entities', hint: 'Structured information' },
   { id: 'api', label: 'API', hint: 'Managed connections' },
+  { id: 'access', label: 'Access', hint: 'Allowed accounts' },
 ];
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
@@ -46,6 +49,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     setShowEvidencePanel,
   } = useProfile();
   const theme = useTheme();
+  const { data: session } = useSession();
+  const isAdmin = session?.role === 'ADMIN';
   const [activeTab, setActiveTab] = useState<SettingsTab>('avatar');
   const [isSaving, setIsSaving] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
@@ -123,6 +128,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
         return <EntitySettings profileId={currentProfile.id} />;
       case 'api':
         return <APISettings />;
+      case 'access':
+        return isAdmin ? <AccessSettings /> : null;
     }
   };
 
@@ -170,7 +177,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
           <nav className={`flex shrink-0 gap-1 overflow-x-auto border-b p-2 md:w-48 md:flex-col md:overflow-visible md:border-b-0 md:border-r md:p-3 ${
             theme === 'light' ? 'border-zinc-200 bg-zinc-50/70' : 'border-zinc-800 bg-zinc-950/25'
           }`}>
-            {TABS.map((tab) => (
+            {TABS.filter((tab) => tab.id !== 'access' || isAdmin).map((tab) => (
               <button
                 key={tab.id}
                 type="button"

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { downloadBlobBuffer } from '@/lib/blob-storage';
+import { getProfile } from '@/lib/profile-service';
 
 export async function GET(
   _request: NextRequest,
@@ -10,8 +11,11 @@ export async function GET(
   try {
     const session = await requireAuth();
     const { id: profileId, fileId } = await params;
+    if (!await getProfile(session.userId, profileId)) {
+      return NextResponse.json({ error: 'Document not found' }, { status: 404 });
+    }
     const file = await db.knowledgeFile.findFirst({
-      where: { id: fileId, profileId, userId: session.userId },
+      where: { id: fileId, profileId },
       select: { renderedPdfBlobUrl: true },
     });
     if (!file) return NextResponse.json({ error: 'Document not found' }, { status: 404 });

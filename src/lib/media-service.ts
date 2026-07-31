@@ -48,16 +48,12 @@ async function verifyBlobAccess(userId: string, blobUrl: string): Promise<boolea
     const blobUserId = pathParts[0];
     const profileId = pathParts[1];
     
-    // Verify the blob belongs to this user
-    if (blobUserId !== userId) {
-      return false;
-    }
-    
-    // Verify profile ownership
+    // Allow the owner, or any active user accessing a centrally shared profile.
     const profile = await db.profile.findFirst({
       where: {
         id: profileId,
-        userId: userId,
+        userId: blobUserId,
+        OR: [{ userId }, { isShared: true }],
       },
       select: {
         id: true,
@@ -79,7 +75,7 @@ async function verifyBlobAccess(userId: string, blobUrl: string): Promise<boolea
       const entity = await db.entity.findFirst({
         where: {
           id: entityId,
-          userId: userId,
+          userId: blobUserId,
           profileId: profileId,
         },
         select: {
@@ -98,7 +94,7 @@ async function verifyBlobAccess(userId: string, blobUrl: string): Promise<boolea
       const knowledgeFile = await db.knowledgeFile.findFirst({
         where: {
           blobUrl: blobUrl,
-          userId: userId,
+          userId: blobUserId,
           profileId: profileId,
         },
         select: {

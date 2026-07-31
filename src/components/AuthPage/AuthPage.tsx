@@ -20,6 +20,7 @@ export const AuthPage: React.FC = () => {
   
   const [email, setEmail] = useState('amm.alsaadi@gmail.com');
   const [name, setName] = useState('');
+  const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,6 +33,7 @@ export const AuthPage: React.FC = () => {
       const result = await signIn('credentials', {
         email,
         name: name || email.split('@')[0],
+        password,
         redirect: false,
       });
 
@@ -59,7 +61,7 @@ export const AuthPage: React.FC = () => {
             Sign in to your account
           </h2>
           <p className="mt-2 text-center text-sm text-[var(--text-secondary)]">
-            Development mode: Use any email to sign in
+            Sign in with an approved platform account
           </p>
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
@@ -77,6 +79,15 @@ export const AuthPage: React.FC = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="amm.alsaadi@gmail.com"
+            />
+            <Input
+              label="Password"
+              type="password"
+              autoComplete="current-password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter your password"
             />
             <Input
               label="Name (optional)"
