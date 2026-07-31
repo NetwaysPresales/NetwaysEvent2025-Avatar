@@ -60,6 +60,7 @@ interface ProfileContextType {
   setTTSConfig: (config: TTSConfig) => void;
   setOpenAIConfig: (config: AzureOpenAIConfig) => void;
   setAppTitle: (title: string) => void;
+  setProfileName: (name: string) => void;
   setAppDescription: (description: string) => void;
   setLogoUrl: (url: string | null) => void;
   setBackgroundUrl: (url: string | null) => void;
@@ -548,6 +549,17 @@ export const ProfileProvider = ({ children }: { children: ReactNode }) => {
     });
   }, []);
 
+  const setProfileName = useCallback((name: string) => {
+    setProfileState((prevState) => prevState.type === 'loaded'
+      ? { ...prevState, profile: { ...prevState.profile, name } }
+      : prevState);
+    setProfiles((current) => current.map((profile) => (
+      profileState.type === 'loaded' && profile.id === profileState.profile.id
+        ? { ...profile, name }
+        : profile
+    )));
+  }, [profileState]);
+
   const setShowEvidencePanel = useCallback((show: boolean) => {
     setProfileState((prevState) => {
       if (prevState.type === 'loaded') {
@@ -699,6 +711,7 @@ export const ProfileProvider = ({ children }: { children: ReactNode }) => {
         setTTSConfig,
         setOpenAIConfig,
         setAppTitle,
+        setProfileName,
         setAppDescription,
         setLogoUrl,
         setBackgroundUrl,

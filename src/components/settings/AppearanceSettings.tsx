@@ -13,6 +13,7 @@ import { Input, Textarea } from '@/components/ui';
 import { DragDropUpload } from '@/components/AssetUpload/DragDropUpload';
 
 interface AppearanceSettingsProps {
+  profileName: string;
   appTitle: string;
   appDescription: string;
   logoUrl: string | null; // API endpoint URL or null
@@ -20,6 +21,7 @@ interface AppearanceSettingsProps {
   logoShowContainer: boolean;
   showEvidencePanel: boolean;
   onTitleChange: (title: string) => void;
+  onProfileNameChange: (name: string) => void;
   onDescriptionChange: (description: string) => void;
   onLogoChange: (url: string | null) => void;
   onBackgroundChange: (url: string | null) => void;
@@ -29,6 +31,7 @@ interface AppearanceSettingsProps {
 }
 
 export const AppearanceSettings: React.FC<AppearanceSettingsProps> = ({
+  profileName,
   appTitle,
   appDescription,
   logoUrl,
@@ -36,6 +39,7 @@ export const AppearanceSettings: React.FC<AppearanceSettingsProps> = ({
   logoShowContainer,
   showEvidencePanel,
   onTitleChange,
+  onProfileNameChange,
   onDescriptionChange,
   onLogoChange,
   onBackgroundChange,
@@ -55,6 +59,13 @@ export const AppearanceSettings: React.FC<AppearanceSettingsProps> = ({
 
       <div className="space-y-4">
         <Input
+          label="Preset Name"
+          value={profileName}
+          onChange={(e) => onProfileNameChange(e.target.value)}
+          placeholder="e.g., Zayd | Finance & Procurement"
+        />
+
+        <Input
           label="App Title"
           value={appTitle}
           onChange={(e) => onTitleChange(e.target.value)}
@@ -65,7 +76,7 @@ export const AppearanceSettings: React.FC<AppearanceSettingsProps> = ({
           label="App Description"
           value={appDescription}
           onChange={(e) => onDescriptionChange(e.target.value)}
-          placeholder="e.g., AI-powered voice assistant"
+          placeholder="Describe the policy areas and audience for this preset"
           rows={3}
         />
 

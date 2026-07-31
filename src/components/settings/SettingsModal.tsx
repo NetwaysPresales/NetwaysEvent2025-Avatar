@@ -42,6 +42,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     setTTSConfig,
     setOpenAIConfig,
     setAppTitle,
+    setProfileName,
     setAppDescription,
     setLogoUrl,
     setBackgroundUrl,
@@ -107,6 +108,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
       case 'appearance':
         return (
           <AppearanceSettings
+            profileName={currentProfile.name}
             appTitle={hydrated.appearance.appTitle}
             appDescription={hydrated.appearance.appDescription}
             logoUrl={hydrated.appearance.logoUrl}
@@ -114,6 +116,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
             logoShowContainer={hydrated.appearance.logoShowContainer}
             showEvidencePanel={hydrated.appearance.showEvidencePanel}
             onTitleChange={setAppTitle}
+            onProfileNameChange={setProfileName}
             onDescriptionChange={setAppDescription}
             onLogoChange={setLogoUrl}
             onBackgroundChange={setBackgroundUrl}

@@ -43,7 +43,9 @@ async function main() {
   if (disabledProfileResponse.status !== 401) throw new Error(`Disabled user profile API status was ${disabledProfileResponse.status}`);
 
   const userProfilesResponse = await fetch(`${APP_URL}/api/profiles`, { headers: { Cookie: userCookie } });
-  const userProfiles = await userProfilesResponse.json() as { profiles: Array<{ id: string }> };
+  const userProfiles = await userProfilesResponse.json() as {
+    profiles: Array<{ id: string; name: string; appTitle: string | null; appDescription: string | null; logoBlobUrl: string | null }>;
+  };
   const sharedProfileIds = new Set(['6402f32f-17b6-4ccc-9054-d45a610ec2f9', '538d934e-d0ce-4ed6-bf42-55d00d3eb5e0']);
   if (!userProfilesResponse.ok || [...sharedProfileIds].some((id) => !userProfiles.profiles.some((profile) => profile.id === id))) {
     throw new Error('Approved user does not see both shared profiles');
@@ -51,6 +53,21 @@ async function main() {
   const adminProfilesResponse = await fetch(`${APP_URL}/api/profiles`, { headers: { Cookie: adminCookie } });
   const adminProfiles = await adminProfilesResponse.json() as { profiles: unknown[] };
   if (!adminProfilesResponse.ok || adminProfiles.profiles.length < 2) throw new Error('Administrator profiles are missing');
+
+  const expectedBranding = new Map([
+    ['6402f32f-17b6-4ccc-9054-d45a610ec2f9', 'Zayd | Finance & Supply Chain'],
+    ['538d934e-d0ce-4ed6-bf42-55d00d3eb5e0', 'Layla | Human Resources'],
+  ]);
+  for (const [profileId, expectedName] of expectedBranding) {
+    const brandedProfile = userProfiles.profiles.find((profile) => profile.id === profileId);
+    if (!brandedProfile || brandedProfile.name !== expectedName || brandedProfile.appTitle !== expectedName || !brandedProfile.appDescription || !brandedProfile.logoBlobUrl) {
+      throw new Error(`Branding mismatch for ${expectedName}`);
+    }
+    const logoResponse = await fetch(`${APP_URL}/api/profiles/${profileId}/assets?assetType=logo`, { headers: { Cookie: userCookie } });
+    if (!logoResponse.ok || logoResponse.headers.get('content-type') !== 'image/png') {
+      throw new Error(`Shared logo failed for ${expectedName}`);
+    }
+  }
 
   const laylaProfileId = '538d934e-d0ce-4ed6-bf42-55d00d3eb5e0';
   const sharedKnowledgeResponse = await fetch(`${APP_URL}/api/profiles/${laylaProfileId}/knowledge`, { headers: { Cookie: userCookie } });
@@ -104,6 +121,7 @@ async function main() {
     disabledUserApiStatus: disabledProfileResponse.status,
     totalProfileCountForUser: userProfiles.profiles.length,
     sharedProfilesPresent: 2,
+    sharedBrandingVerified: true,
     sharedKnowledgeFiles: sharedKnowledge.files.length,
     sharedDocumentStatus: sharedDocumentResponse.status,
     sharedMutationStatus: sharedMutationResponse.status,

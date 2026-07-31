@@ -14,8 +14,8 @@ import {
 import { deleteKnowledgeFileChunks, indexKnowledgeFile } from '../src/lib/knowledge-search';
 
 const SOURCE_PROFILE_ID = '6402f32f-17b6-4ccc-9054-d45a610ec2f9';
-const PROFILE_NAME = 'Layla Avatar | Human Resources';
-const LEGACY_PROFILE_NAME = 'Laya Avatar | Human Resources';
+const PROFILE_NAME = 'Layla | Human Resources';
+const LEGACY_PROFILE_NAMES = ['Laya Avatar | Human Resources', 'Layla Avatar | Human Resources'];
 const POLICY_PATHS = [
   'C:\\Users\\abdullah\\Downloads\\Erth Zayed_HR Policy framework_DRAFT_v0.3 (latest)_ENG (1).docx',
   'C:\\Users\\abdullah\\Downloads\\Erth Zayed HR Policy -AR (1).docx',
@@ -189,7 +189,7 @@ async function main() {
   };
 
   let profile = await db.profile.findFirst({
-    where: { userId: sourceProfile.userId, name: { in: [PROFILE_NAME, LEGACY_PROFILE_NAME] } },
+    where: { userId: sourceProfile.userId, name: { in: [PROFILE_NAME, ...LEGACY_PROFILE_NAMES] } },
   });
   if (profile) {
     profile = await db.profile.update({ where: { id: profile.id }, data: commonData });

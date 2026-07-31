@@ -12,7 +12,6 @@ import { useTheme } from '@/hooks/useTheme';
 import { DeleteProfileConfirmation } from './DeleteProfileConfirmation';
 import { ProfileCardLogo } from './ProfileCardLogo';
 import type { Profile } from '@/types/profile';
-import type { AvatarConfig } from '@/types/avatar';
 
 interface ProfileListProps {
   onProfileSelect: (profile: Profile) => void;
@@ -106,22 +105,12 @@ export const ProfileList: React.FC<ProfileListProps> = ({
                   {p.isShared && <span className="shrink-0 rounded-full bg-[var(--accent-primary)]/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-[var(--accent-primary)]">Shared</span>}
                 </div>
 
-                <div
-                  className={`flex flex-wrap gap-2 text-xs font-medium opacity-60 theme-transition ${
-                    theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'
-                  }`}
-                >
-                  <span className="capitalize">
-                    {((p.avatarConfig as AvatarConfig)?.character || 'N/A')
-                      .charAt(0)
-                      .toUpperCase() +
-                      ((p.avatarConfig as AvatarConfig)?.character || 'N/A').slice(1)}
-                  </span>
-                  <span>•</span>
-                  <span className="truncate max-w-[120px] capitalize" title="Avatar Style">
-                    {(p.avatarConfig as AvatarConfig)?.style || 'Default'}
-                  </span>
-                </div>
+                {p.appTitle && p.appTitle !== p.name && (
+                  <div className={`truncate text-xs font-medium ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-300'}`}>{p.appTitle}</div>
+                )}
+                <p className={`line-clamp-2 text-[11px] leading-4 ${theme === 'light' ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                  {p.appDescription || 'No preset description configured.'}
+                </p>
               </div>
 
               <div className="flex gap-1 pointer-events-auto shrink-0">

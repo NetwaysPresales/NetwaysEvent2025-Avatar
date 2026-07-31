@@ -394,7 +394,7 @@ export const AvatarPage: React.FC = () => {
             <span className="text-sm font-medium">End Session</span>
           </button>
 
-          {(currentProfile.id === '6402f32f-17b6-4ccc-9054-d45a610ec2f9' || currentProfile.name === 'Layla Avatar | Human Resources') && (
+          {(currentProfile.id === '6402f32f-17b6-4ccc-9054-d45a610ec2f9' || currentProfile.id === '538d934e-d0ce-4ed6-bf42-55d00d3eb5e0') && (
             <a
               href="https://creativecommons.org/licenses/by-sa/4.0/"
               target="_blank"
