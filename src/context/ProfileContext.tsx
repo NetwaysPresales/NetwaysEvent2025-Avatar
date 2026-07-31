@@ -287,22 +287,16 @@ export const ProfileProvider = ({ children }: { children: ReactNode }) => {
       const savedProfile = responseData.profile;
       
       if (savedProfile) {
-        // Immediately update the profiles list with the saved data to keep card metadata in sync
-        setProfiles((prevProfiles) => {
-          return prevProfiles.map(p => p.id === profile.id ? savedProfile : p);
-        });
+        const savedHydrated = hydrateProfile(savedProfile);
+        setProfileState({ type: 'loaded', profile: savedProfile, hydrated: savedHydrated });
+        setProfiles((prevProfiles) => prevProfiles.map((item) => item.id === profile.id ? savedProfile : item));
       }
-
-      // Reload profile to get updated data (this will also update the profiles list)
-      await loadProfile(profile.id);
-      
-      // Refresh profiles list to ensure everything is in sync
       await refreshProfiles();
     } catch (error) {
       console.error('Failed to save profile', error);
       throw error;
     }
-  }, [profileState, hydrated, loadProfile, refreshProfiles]);
+  }, [profileState, hydrated, refreshProfiles]);
 
   // Create new profile
   const createProfile = useCallback(async (name: string): Promise<Profile | null> => {
