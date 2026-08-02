@@ -1,6 +1,7 @@
 /** Utilities for turning streamed Markdown into natural avatar speech. */
 
 const DOCUMENT_REFERENCES: Array<[RegExp, string]> = [
+  [/Erth[_ ]Zayed[_ ]AI[_ ]Avatar[_ ]Knowledge[_ ]Base[^\n,;]*?\.json/gi, 'the Erth Zayed AI Avatar Knowledge Base'],
   [/Erth[_ ]Zayed[_ ]AI[_ ]Knowledge[_ ]Base[^\n,;]*?\.docx/gi, 'the Erth Zayed Knowledge Base'],
   [/(?:Erth Zayed[_ ]?)?HR Policy[^\n,;]*?\.docx/gi, 'the HR Policy'],
   [/SH-Erth Zayed[_ ]Finance Policy[^\n,;]*?\.docx/gi, 'the Arabic Finance Policy'],
@@ -9,15 +10,38 @@ const DOCUMENT_REFERENCES: Array<[RegExp, string]> = [
   [/(?:Erth Zayed[_ ]?)?Procurement Policy[^\n,;]*?\.docx/gi, 'the Procurement Policy'],
 ];
 
-export function naturalizeDocumentReferences(text: string): string {
-  return DOCUMENT_REFERENCES.reduce(
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+export function friendlySourceName(filename: string): string {
+  const lower = filename.toLowerCase();
+  if (lower.includes('ai_avatar_knowledge_base') || lower.includes('ai avatar knowledge base')) return 'Erth Zayed AI Avatar Knowledge Base';
+  if (lower.includes('ai_knowledge_base') || lower.includes('ai knowledge base')) return 'Erth Zayed Knowledge Base';
+  if (lower.includes('hr policy')) return 'HR Policy';
+  if (lower.includes('finance policy')) return lower.startsWith('sh-') ? 'Arabic Finance Policy' : 'Finance Policy';
+  if (lower.includes('accounting policy')) return 'Accounting Policy';
+  if (lower.includes('procurement policy')) return lower.includes('arabic') ? 'Arabic Procurement Policy' : 'Procurement Policy';
+  return filename
+    .replace(/\.(docx|pdf|json|txt|md|markdown)$/i, '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s*\(\d+\)\s*$/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function naturalizeDocumentReferences(text: string, sourceFilenames: string[] = []): string {
+  const knownNaturalized = DOCUMENT_REFERENCES.reduce(
     (value, [pattern, replacement]) => value.replace(pattern, replacement),
     text
   );
+  return sourceFilenames.reduce((value, filename) => (
+    value.replace(new RegExp(escapeRegex(filename), 'gi'), `the ${friendlySourceName(filename)}`)
+  ), knownNaturalized);
 }
 
-export function formatTextForDisplay(text: string): string {
-  return naturalizeDocumentReferences(text)
+export function formatTextForDisplay(text: string, sourceFilenames: string[] = []): string {
+  let formatted = naturalizeDocumentReferences(text, sourceFilenames)
     .replace(
       /^\s*(?:\*{0,2})?Sources?\s*:\s*(.+?)\s*$/gim,
       (_match, rawCitation: string) => {
@@ -33,6 +57,7 @@ export function formatTextForDisplay(text: string): string {
     )
     .replace(/\(\s*the\s+(HR|Finance|Accounting|Procurement) Policy\b/gi, '($1 Policy')
     .replace(/\(\s*the\s+Erth Zayed Knowledge Base\b/gi, '(Erth Zayed Knowledge Base')
+    .replace(/\(\s*the\s+Erth Zayed AI Avatar Knowledge Base\b/gi, '(Erth Zayed AI Avatar Knowledge Base')
     .replace(/\((HR|Finance|Accounting|Procurement) Policy Framework\b/gi, '($1 Policy')
     .replace(
       /\((HR|Finance|Accounting|Procurement) Policy\s*,\s*((?:p|pp|page|pages)\.?\s*[\d\s,–—-]+)\)/gi,
@@ -53,7 +78,28 @@ export function formatTextForDisplay(text: string): string {
           .replace(/[—–]/g, '-');
         return `[Erth Zayed Knowledge Base · ${compactPages.trim()}](#policy-citation)`;
       }
+    )
+    .replace(
+      /\(Erth Zayed (?:AI )?Avatar Knowledge Base\s*,?\s*((?:p|pp|page|pages)\.?\s*[\d\s,–—-]+)?\)/gi,
+      (_match, pages: string) => {
+        const compactPages = pages
+          ? ` · ${pages.replace(/^pages?\s+/i, 'pp. ').replace(/^p{1,2}\.?\s*/i, (prefix) => prefix.toLowerCase().startsWith('pp') ? 'pp. ' : 'p. ').replace(/[—–]/g, '-').trim()}`
+          : '';
+        return `[Erth Zayed AI Avatar Knowledge Base${compactPages}](#policy-citation)`;
+      }
     );
+
+  for (const filename of sourceFilenames) {
+    const label = friendlySourceName(filename);
+    const citationPattern = new RegExp(`\\(\\s*(?:the\\s+)?${escapeRegex(label)}\\s*(?:,\\s*((?:p|pp|page|pages)\\.?\\s*[\\d\\s,–—-]+))?\\)`, 'gi');
+    formatted = formatted.replace(citationPattern, (_match, pages: string | undefined) => {
+      const compactPages = pages
+        ? ` · ${pages.replace(/^pages?\s+/i, 'pp. ').replace(/^p{1,2}\.?\s*/i, (prefix) => prefix.toLowerCase().startsWith('pp') ? 'pp. ' : 'p. ').replace(/[—–]/g, '-').trim()}`
+        : '';
+      return `[${label}${compactPages}](#policy-citation)`;
+    });
+  }
+  return formatted;
 }
 
 export function cleanTextForTTS(text: string): string {
@@ -61,6 +107,7 @@ export function cleanTextForTTS(text: string): string {
     .replace(/^\s*(?:\*{0,2})?Sources?\s*:.*$/gim, '')
     .replace(/\[(?:HR|Finance|Accounting|Procurement) Policy[^\]]*]\(#policy-citation\)/gi, '')
     .replace(/\[Erth Zayed Knowledge Base[^\]]*]\(#policy-citation\)/gi, '')
+    .replace(/\[[^\]]+]\(#policy-citation\)/gi, '')
     .replace(/\((?:the\s+)?(?:HR|Finance|Accounting|Procurement)(?:\s+Policy(?:\s+Framework)?)?[^)]*\)/gi, '')
     .replace(/\[(?:the\s+)?(?:HR|Finance|Accounting|Procurement)(?:\s+Policy(?:\s+Framework)?)?[^\]]*]/gi, '')
     .replace(/\((?:the\s+)?Erth Zayed Knowledge Base[^)]*\)/gi, '')

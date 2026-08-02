@@ -102,6 +102,23 @@ async function main() {
     throw new Error(`Normal-user shared agent failed (${agentResponse.status}): ${agentBody.slice(0, 1000)}`);
   }
 
+  const jsonCitationResponse = await fetch(`${APP_URL}/api/agent`, {
+    method: 'POST',
+    headers: { Cookie: userCookie, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ profileId: laylaProfileId, userText: 'What is the organizational role of Erth Zayed Philanthropies? Answer in one sentence.', detectedLocale: 'en-US', detectedLanguage: 'English' }),
+  });
+  const jsonCitationBody = await jsonCitationResponse.text();
+  const jsonCitationContent = jsonCitationBody
+    .split('\n')
+    .filter((line) => line.startsWith('data:'))
+    .map((line) => JSON.parse(line.replace(/^data:\s*/, '')) as { event: string; data?: unknown })
+    .filter((event) => event.event === 'content')
+    .map((event) => String(event.data || ''))
+    .join('');
+  if (!jsonCitationResponse.ok || !jsonCitationContent.includes('#policy-citation') || jsonCitationContent.includes('AI_Avatar_Knowledge_Base.json')) {
+    throw new Error(`JSON citation rendering failed (${jsonCitationResponse.status}): ${jsonCitationBody.slice(0, 1500)}`);
+  }
+
   const credentialsSignIn = async (email: string, password: string) => {
     const csrfResponse = await fetch(`${APP_URL}/api/auth/csrf`);
     const csrfPayload = await csrfResponse.json() as { csrfToken: string };
@@ -143,6 +160,7 @@ async function main() {
     sharedMutationStatus: sharedMutationResponse.status,
     normalUserSpeechTokenStatus: speechTokenResponse.status,
     normalUserAgentStatus: agentResponse.status,
+    jsonCitationStatus: jsonCitationResponse.status,
     adminProfileCount: adminProfiles.profiles.length,
     validPasswordAccepted,
     wrongPasswordAccepted,
