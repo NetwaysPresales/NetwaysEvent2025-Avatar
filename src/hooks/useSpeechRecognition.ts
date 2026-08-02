@@ -5,6 +5,7 @@ import * as SpeechSDK from 'microsoft-cognitiveservices-speech-sdk';
 import type { SpeechConfig, STTConfig } from '@/types/avatar';
 import { fetchSpeechSessionCredentials } from '@/lib/webrtc';
 import { getLanguageDisplay } from '@/lib/language-display';
+import { normalizeErthZayedTranscript } from '@/lib/text-processing';
 
 export interface SpeechRecognitionUpdate {
   text: string;
@@ -172,7 +173,7 @@ export function useSpeechRecognition({
       // Setup event handlers
       recognizer.recognizing = (s, e) => {
         if (e.result.reason === SpeechSDK.ResultReason.RecognizingSpeech) {
-          const text = e.result.text;
+          const text = normalizeErthZayedTranscript(e.result.text);
           const detection = SpeechSDK.AutoDetectSourceLanguageResult.fromResult(e.result);
           const locale = resolveDetectedLocale(
             text,
@@ -196,7 +197,7 @@ export function useSpeechRecognition({
 
       recognizer.recognized = (s, e) => {
         if (e.result.reason === SpeechSDK.ResultReason.RecognizedSpeech) {
-          const text = e.result.text.trim();
+          const text = normalizeErthZayedTranscript(e.result.text).trim();
           const detection = SpeechSDK.AutoDetectSourceLanguageResult.fromResult(e.result);
           const locale = resolveDetectedLocale(
             text,

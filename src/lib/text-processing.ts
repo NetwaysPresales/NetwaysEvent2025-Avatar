@@ -10,6 +10,14 @@ const DOCUMENT_REFERENCES: Array<[RegExp, string]> = [
   [/(?:Erth Zayed[_ ]?)?Procurement Policy[^\n,;]*?\.docx/gi, 'the Procurement Policy'],
 ];
 
+export function normalizeErthZayedTranscript(text: string): string {
+  const zayedVariant = '(?:zayed|zaid|zayid|zayed|sayed|sayid|side|aid)';
+  return text
+    .replace(new RegExp(`\\b(?:earth|erth)(?:['’]s)?[\\s,?!.:;_-]*${zayedVariant}\\b`, 'giu'), 'Erth Zayed')
+    .replace(new RegExp(`\\bearthquake[\\s,?!.:;_-]+${zayedVariant}\\b`, 'giu'), 'Erth Zayed')
+    .replace(/\b(?:earthside|erthside|earthzayed|erthzayed)\b/giu, 'Erth Zayed');
+}
+
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -168,6 +176,7 @@ export function cleanTextForTTS(text: string): string {
     .replace(/\bSSC\b/g, 'S S C')
     .replace(/\bEZ\b/g, 'E Z')
     .replace(/\bUAE\b/g, 'U A E')
+    .replace(/\bErth\b/giu, 'Earth')
     .replace(/\bp\.\s*(\d+)/gi, 'page $1')
     .replace(/\bv(\d+)\.(\d+)\b/gi, 'version $1 point $2')
     .replace(/\.(?:docx|pdf)\b/gi, '')
