@@ -14,6 +14,30 @@ function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function compactCitationLocator(locator: string | undefined): string {
+  if (!locator?.trim()) return '';
+  const compact = locator
+    .trim()
+    .replace(/^pages\s+(?=\d)/i, 'pp. ')
+    .replace(/^page\s+(?=\d)/i, 'p. ')
+    .replace(/^pp\.?\s*(?=\d)/i, 'pp. ')
+    .replace(/^p\.?\s*(?=\d)/i, 'p. ')
+    .replace(/[—–]/g, '-');
+  return ` · ${compact}`;
+}
+
+function citationTokens(value: string): Set<string> {
+  const ignored = new Set(['the', 'and', 'for', 'from', 'framework', 'draft', 'version', 'eng', 'arabic', 'document', 'source']);
+  return new Set(
+    (value.toLowerCase().match(/[\p{L}\p{N}]+/gu) || [])
+      .filter((token) => token.length > 1 && !ignored.has(token))
+  );
+}
+
+function isCitationLocator(value: string): boolean {
+  return /^(?:p{1,2}\.?|pages?|faq|section|sec\.?|clause|article|appendix|chapter|record|item|entry|§)\s*[\w.-]+/i.test(value.trim());
+}
+
 export function friendlySourceName(filename: string): string {
   const lower = filename.toLowerCase();
   if (lower.includes('ai_avatar_knowledge_base') || lower.includes('ai avatar knowledge base')) return 'Erth Zayed AI Avatar Knowledge Base';
@@ -91,14 +115,37 @@ export function formatTextForDisplay(text: string, sourceFilenames: string[] = [
 
   for (const filename of sourceFilenames) {
     const label = friendlySourceName(filename);
-    const citationPattern = new RegExp(`\\(\\s*(?:the\\s+)?${escapeRegex(label)}\\s*(?:,\\s*((?:p|pp|page|pages)\\.?\\s*[\\d\\s,–—-]+))?\\)`, 'gi');
-    formatted = formatted.replace(citationPattern, (_match, pages: string | undefined) => {
-      const compactPages = pages
-        ? ` · ${pages.replace(/^pages?\s+/i, 'pp. ').replace(/^p{1,2}\.?\s*/i, (prefix) => prefix.toLowerCase().startsWith('pp') ? 'pp. ' : 'p. ').replace(/[—–]/g, '-').trim()}`
-        : '';
-      return `[${label}${compactPages}](#policy-citation)`;
+    const citationPattern = new RegExp(`\\(\\s*(?:the\\s+)?${escapeRegex(label)}\\s*(?:,\\s*([^()\\n]{1,80}))?\\)`, 'gi');
+    formatted = formatted.replace(citationPattern, (_match, locator: string | undefined) => {
+      return `[${label}${compactCitationLocator(locator)}](#policy-citation)`;
     });
   }
+  const uniqueSources = [...new Set(sourceFilenames)].map((filename) => ({
+    filename,
+    label: friendlySourceName(filename),
+    tokens: citationTokens(`${filename} ${friendlySourceName(filename)}`),
+  }));
+  formatted = formatted.replace(/\(([^()\n]{2,160})\)/g, (original, content: string) => {
+    const parts = content.split(',');
+    const possibleLocator = parts.length > 1 ? parts[parts.length - 1].trim() : '';
+    const standaloneLocator = parts.length === 1 && isCitationLocator(content.trim()) ? content.trim() : undefined;
+    const locator = standaloneLocator || (isCitationLocator(possibleLocator) ? possibleLocator : undefined);
+    const labelText = standaloneLocator ? '' : locator ? parts.slice(0, -1).join(',').trim() : content.trim();
+    const labelTokens = citationTokens(labelText);
+    let bestSource: typeof uniqueSources[number] | undefined;
+    let bestScore = 0;
+    for (const source of uniqueSources) {
+      const score = [...labelTokens].filter((token) => source.tokens.has(token)).length;
+      if (score > bestScore) {
+        bestScore = score;
+        bestSource = source;
+      }
+    }
+    if (!bestSource && uniqueSources.length === 1 && locator) bestSource = uniqueSources[0];
+    const unambiguousSingleSource = uniqueSources.length === 1 && (Boolean(locator) || bestScore >= 1);
+    if (!bestSource || (bestScore < 2 && !unambiguousSingleSource)) return original;
+    return `[${bestSource.label}${compactCitationLocator(locator)}](#policy-citation)`;
+  });
   return formatted;
 }
 

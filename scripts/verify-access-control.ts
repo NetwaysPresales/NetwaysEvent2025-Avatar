@@ -105,7 +105,7 @@ async function main() {
   const jsonCitationResponse = await fetch(`${APP_URL}/api/agent`, {
     method: 'POST',
     headers: { Cookie: userCookie, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ profileId: laylaProfileId, userText: 'What is the organizational role of Erth Zayed Philanthropies? Answer in one sentence.', detectedLocale: 'en-US', detectedLanguage: 'English' }),
+    body: JSON.stringify({ profileId: laylaProfileId, userText: 'When was Erth Zayed Philanthropies founded? Answer in one sentence and cite the relevant FAQ.', detectedLocale: 'en-US', detectedLanguage: 'English' }),
   });
   const jsonCitationBody = await jsonCitationResponse.text();
   const jsonCitationContent = jsonCitationBody
@@ -115,7 +115,7 @@ async function main() {
     .filter((event) => event.event === 'content')
     .map((event) => String(event.data || ''))
     .join('');
-  if (!jsonCitationResponse.ok || !jsonCitationContent.includes('#policy-citation') || jsonCitationContent.includes('AI_Avatar_Knowledge_Base.json')) {
+  if (!jsonCitationResponse.ok || !jsonCitationContent.includes('#policy-citation') || !jsonCitationContent.includes('FAQ 02') || jsonCitationContent.includes('AI_Avatar_Knowledge_Base.json')) {
     throw new Error(`JSON citation rendering failed (${jsonCitationResponse.status}): ${jsonCitationBody.slice(0, 1500)}`);
   }
 
