@@ -1,6 +1,7 @@
 /** Utilities for turning streamed Markdown into natural avatar speech. */
 
 const DOCUMENT_REFERENCES: Array<[RegExp, string]> = [
+  [/Erth[_ ]Zayed[_ ]AI[_ ]Knowledge[_ ]Base[^\n,;]*?\.docx/gi, 'the Erth Zayed Knowledge Base'],
   [/(?:Erth Zayed[_ ]?)?HR Policy[^\n,;]*?\.docx/gi, 'the HR Policy'],
   [/SH-Erth Zayed[_ ]Finance Policy[^\n,;]*?\.docx/gi, 'the Arabic Finance Policy'],
   [/(?:Erth Zayed[_ ]?)?Finance Policy[^\n,;]*?\.docx/gi, 'the Finance Policy'],
@@ -31,6 +32,7 @@ export function formatTextForDisplay(text: string): string {
       }
     )
     .replace(/\(\s*the\s+(HR|Finance|Accounting|Procurement) Policy\b/gi, '($1 Policy')
+    .replace(/\(\s*the\s+Erth Zayed Knowledge Base\b/gi, '(Erth Zayed Knowledge Base')
     .replace(/\((HR|Finance|Accounting|Procurement) Policy Framework\b/gi, '($1 Policy')
     .replace(
       /\((HR|Finance|Accounting|Procurement) Policy\s*,\s*((?:p|pp|page|pages)\.?\s*[\d\s,–—-]+)\)/gi,
@@ -41,6 +43,16 @@ export function formatTextForDisplay(text: string): string {
           .replace(/[—–]/g, '-');
         return `[${policy} Policy · ${compactPages.trim()}](#policy-citation)`;
       }
+    )
+    .replace(
+      /\(Erth Zayed Knowledge Base\s*,\s*((?:p|pp|page|pages)\.?\s*[\d\s,–—-]+)\)/gi,
+      (_match, pages: string) => {
+        const compactPages = pages
+          .replace(/^pages?\s+/i, 'pp. ')
+          .replace(/^p{1,2}\.?\s*/i, (prefix) => prefix.toLowerCase().startsWith('pp') ? 'pp. ' : 'p. ')
+          .replace(/[—–]/g, '-');
+        return `[Erth Zayed Knowledge Base · ${compactPages.trim()}](#policy-citation)`;
+      }
     );
 }
 
@@ -48,8 +60,11 @@ export function cleanTextForTTS(text: string): string {
   const withoutCitations = naturalizeDocumentReferences(text)
     .replace(/^\s*(?:\*{0,2})?Sources?\s*:.*$/gim, '')
     .replace(/\[(?:HR|Finance|Accounting|Procurement) Policy[^\]]*]\(#policy-citation\)/gi, '')
+    .replace(/\[Erth Zayed Knowledge Base[^\]]*]\(#policy-citation\)/gi, '')
     .replace(/\((?:the\s+)?(?:HR|Finance|Accounting|Procurement)(?:\s+Policy(?:\s+Framework)?)?[^)]*\)/gi, '')
-    .replace(/\[(?:the\s+)?(?:HR|Finance|Accounting|Procurement)(?:\s+Policy(?:\s+Framework)?)?[^\]]*]/gi, '');
+    .replace(/\[(?:the\s+)?(?:HR|Finance|Accounting|Procurement)(?:\s+Policy(?:\s+Framework)?)?[^\]]*]/gi, '')
+    .replace(/\((?:the\s+)?Erth Zayed Knowledge Base[^)]*\)/gi, '')
+    .replace(/\[(?:the\s+)?Erth Zayed Knowledge Base[^\]]*]/gi, '');
   const cleaned = withoutCitations
     .replace(/\[([^\]]+)]\([^\s)]+\)/g, '$1')
     .replace(/^\s{0,3}#{1,6}\s+/gm, '')

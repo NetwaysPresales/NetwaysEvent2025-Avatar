@@ -23,8 +23,8 @@ function getPrismaClient(): PrismaClient {
 
   const pool = new Pool({
     connectionString: url,
-    max: 20,
-    idleTimeoutMillis: 30000,
+    max: Math.max(1, Number(process.env.DATABASE_POOL_MAX || 5)),
+    idleTimeoutMillis: 10000,
     connectionTimeoutMillis: 10000, // Increased from 2000ms to 10000ms (10 seconds)
     // Keep connections alive longer to avoid timeouts
     keepAlive: true,
@@ -39,9 +39,9 @@ function getPrismaClient(): PrismaClient {
       : ['error'],
   });
 
-  if (process.env.NODE_ENV !== 'production') {
-    globalForPrisma.prisma = client;
-  }
+  // Cache in every environment. Without this, each production proxy property
+  // access creates a new Pool and quickly exhausts PostgreSQL connections.
+  globalForPrisma.prisma = client;
 
   return client;
 }

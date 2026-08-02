@@ -6,7 +6,6 @@
 
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth-config';
-import { db } from '@/lib/db';
 import { PLATFORM_ADMIN_EMAIL } from '@/lib/access-control';
 
 /**
@@ -52,16 +51,8 @@ export async function getSession(): Promise<SessionWithUserId | null> {
     return null;
   }
 
-  const platformUser = await db.user.findFirst({
-    where: {
-      id: extendedSession.userId,
-      email: extendedSession.user.email.toLowerCase(),
-      isActive: true,
-    },
-    select: { role: true },
-  });
-  if (!platformUser) return null;
-  return { ...extendedSession, role: platformUser.role };
+  if (!extendedSession.role) return null;
+  return extendedSession;
 }
 
 export async function requireAdmin(): Promise<SessionWithUserId> {

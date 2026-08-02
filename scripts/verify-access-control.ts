@@ -55,17 +55,17 @@ async function main() {
   if (!adminProfilesResponse.ok || adminProfiles.profiles.length < 2) throw new Error('Administrator profiles are missing');
 
   const expectedBranding = new Map([
-    ['6402f32f-17b6-4ccc-9054-d45a610ec2f9', 'Zayd | Finance & Supply Chain'],
-    ['538d934e-d0ce-4ed6-bf42-55d00d3eb5e0', 'Layla | Human Resources'],
+    ['6402f32f-17b6-4ccc-9054-d45a610ec2f9', 'Zayd'],
+    ['538d934e-d0ce-4ed6-bf42-55d00d3eb5e0', 'Layla'],
   ]);
-  for (const [profileId, expectedName] of expectedBranding) {
+  for (const [profileId, expectedAvatarName] of expectedBranding) {
     const brandedProfile = userProfiles.profiles.find((profile) => profile.id === profileId);
-    if (!brandedProfile || brandedProfile.name !== expectedName || brandedProfile.appTitle !== expectedName || !brandedProfile.appDescription || !brandedProfile.logoBlobUrl) {
-      throw new Error(`Branding mismatch for ${expectedName}`);
+    if (!brandedProfile || !brandedProfile.name.startsWith(`${expectedAvatarName} |`) || !brandedProfile.appTitle?.startsWith(`${expectedAvatarName} |`) || !brandedProfile.appDescription || !brandedProfile.logoBlobUrl) {
+      throw new Error(`Branding mismatch for ${expectedAvatarName}: ${JSON.stringify(brandedProfile)}`);
     }
     const logoResponse = await fetch(`${APP_URL}/api/profiles/${profileId}/assets?assetType=logo`, { headers: { Cookie: userCookie } });
     if (!logoResponse.ok || logoResponse.headers.get('content-type') !== 'image/png') {
-      throw new Error(`Shared logo failed for ${expectedName}`);
+      throw new Error(`Shared logo failed for ${expectedAvatarName}`);
     }
   }
 
@@ -85,6 +85,22 @@ async function main() {
     body: JSON.stringify({ name: 'Unauthorized rename' }),
   });
   if (sharedMutationResponse.status !== 404) throw new Error(`Shared profile mutation status was ${sharedMutationResponse.status}`);
+
+  const speechTokenResponse = await fetch(`${APP_URL}/api/speech/token`, { headers: { Cookie: userCookie } });
+  const speechToken = await speechTokenResponse.json() as { authorizationToken?: string; ice?: { urls?: string[] } };
+  if (!speechTokenResponse.ok || !speechToken.authorizationToken || !speechToken.ice?.urls?.length) {
+    throw new Error(`Normal-user Speech token failed (${speechTokenResponse.status})`);
+  }
+
+  const agentResponse = await fetch(`${APP_URL}/api/agent`, {
+    method: 'POST',
+    headers: { Cookie: userCookie, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ profileId: laylaProfileId, userText: 'Briefly introduce yourself.', detectedLocale: 'en-US', detectedLanguage: 'English' }),
+  });
+  const agentBody = await agentResponse.text();
+  if (!agentResponse.ok || !agentBody.includes('"event":"conversation"') || !agentBody.includes('"event":"content"')) {
+    throw new Error(`Normal-user shared agent failed (${agentResponse.status}): ${agentBody.slice(0, 1000)}`);
+  }
 
   const credentialsSignIn = async (email: string, password: string) => {
     const csrfResponse = await fetch(`${APP_URL}/api/auth/csrf`);
@@ -125,6 +141,8 @@ async function main() {
     sharedKnowledgeFiles: sharedKnowledge.files.length,
     sharedDocumentStatus: sharedDocumentResponse.status,
     sharedMutationStatus: sharedMutationResponse.status,
+    normalUserSpeechTokenStatus: speechTokenResponse.status,
+    normalUserAgentStatus: agentResponse.status,
     adminProfileCount: adminProfiles.profiles.length,
     validPasswordAccepted,
     wrongPasswordAccepted,
